@@ -38,7 +38,40 @@ This is a modular, scalable web crawling framework built for advanced scraping, 
 -   **Error-tolerant** – many defensive checks for robustness.
     
 -   **Configurable via `config.py`** – fully customizable logic and thresholds.
+
+-   **Real-Time SSL Certificate Generation**  
+    Automatically generates a self-signed SSL certificate for secure local web interfaces.
     
+-   **Advanced Elasticsearch Queries**  
+    Retrieves detailed analytics from the data stored in Elasticsearch, such as:
+    
+    -   Total number of indexed URLs
+        
+    -   Number of unique domains
+        
+    -   Number of visited pages
+        
+    -   Most common content types
+        
+    -   Number of unique emails extracted
+        
+    -   NSFW detection and domain classification
+        
+    -   Open directory listings
+        
+-   **Dynamic Network Visualization**  
+    Generates a `network.json` and `network.html` file to create a live, interactive **force-directed graph** of the relationships between domains (parent/child hosts). This graph is automatically refreshed every few seconds and features a toggle to pause/resume updates.
+    
+-   **Pornographic Domain Detection**  
+    Identifies domains with a high percentage of NSFW content based on image analysis results (e.g., using `isnsfw` field and resolution thresholds).
+    
+-   **Open Directory Index Finder**  
+    Lists URLs identified as open directories, which can be useful in security audits or recon work.
+    
+-   **Domain Relation Extraction**  
+    Extracts host relationships (e.g., parent-child domain links) for graph building and dependency analysis.
+
+
 
 * * *
 

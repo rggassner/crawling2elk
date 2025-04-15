@@ -38,6 +38,10 @@ ES_RETRY_DELAY=1
 WORDS_REMOVE_SPECIAL_CHARS=True
 WORDS_TO_LOWER=True
 WORDS_MIN_LEN=3
+WORDS_MAX_LEN=40
+BLOCK_CSS=False
+PERFORMANCE_OPTIMIZED=False
+
 
 #be_greedy = True - Save urls to database that might not work, since have not matched any regex.
 BE_GREEDY=False

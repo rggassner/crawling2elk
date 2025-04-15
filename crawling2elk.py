@@ -2,6 +2,9 @@
 import os, re, time, hashlib, signal, random, argparse, urllib3, warnings, bs4.builder
 import numpy as np
 from config import *
+if CATEGORIZE_NSFW:
+    import opennsfw2 as n2
+    model = n2.make_open_nsfw_model()
 from functions import *
 from bs4 import BeautifulSoup
 from urllib.parse import urlsplit
@@ -12,7 +15,6 @@ from urllib.parse import unquote,urljoin,urlparse
 from pathlib import PurePosixPath
 import absl.logging
 absl.logging.set_verbosity('error')
-import opennsfw2 as n2
 from PIL import Image, UnidentifiedImageError
 from io import BytesIO
 from datetime import datetime, timezone
@@ -26,7 +28,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 url_functions = []
 content_type_functions = []
 
-model = None
+#model = None
 
 ##used to generate wordlist
 soup_tag_blocklist = [
@@ -243,7 +245,8 @@ def get_words_from_soup(soup):
     words = [word for word in output.split() if len(word) > WORDS_MIN_LEN]
     return sorted(set(words))
 
-def get_words(text: bytes| str) -> list[str]:
+
+def get_words(text: bytes | str) -> list[str]:
     if not text:
         return []
     if isinstance(text, bytes):
@@ -255,7 +258,10 @@ def get_words(text: bytes| str) -> list[str]:
         text = re.sub(r'[^\w\s]', ' ', text, flags=re.UNICODE)
     if WORDS_TO_LOWER:
         text = text.lower()
-    words = [word for word in text.split() if len(word) > WORDS_MIN_LEN]
+    words = [
+        word for word in text.split()
+        if WORDS_MIN_LEN < len(word) <= WORDS_MAX_LEN
+    ]
     return sorted(set(words))
 
 def get_directory_tree(url):
@@ -422,43 +428,44 @@ def content_type_download(args):
 def content_type_images(args):
     global model
     npixels=0
-    try:
-        img = Image.open(BytesIO(args['content']))
-        width, height = img.size
-        npixels = width * height
-        nsfw_probability=0
-        if img.mode == "CMYK":
-            img = img.convert("RGB")
-        # Check if it's a palette-based image with transparency
-        if img.mode == "P" and "transparency" in img.info:
-            # Convert to RGBA to handle transparency properly
-            img = img.convert("RGBA")
-        filename = hashlib.sha512(img.tobytes()).hexdigest() + ".png"
-    except UnidentifiedImageError as e:
-        #SVG using cairo in the future
-        db_update_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
-        return False
-    except Image.DecompressionBombError as e:
-        db_update_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
-        return False
-    except OSError:
-        db_update_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
-        return False
-    if SAVE_ALL_IMAGES:
-        img.save(IMAGES_FOLDER+'/' + filename, "PNG")
-    if CATEGORIZE_NSFW and npixels > MIN_NSFW_RES :
-        image = n2.preprocess_image(img, n2.Preprocessing.YAHOO)
-        inputs = np.expand_dims(image, axis=0) 
-        predictions = model.predict(inputs, verbose=0)
-        sfw_probability, nsfw_probability = predictions[0]
-        db_update_url(args['url'], isnsfw=nsfw_probability,db=args['db'])
-        if nsfw_probability>NSFW_MIN_PROBABILITY:
-            print('porn {} {}'.format(nsfw_probability,args['url']))
-            if SAVE_NSFW:
-                img.save(NSFW_FOLDER +'/'+ filename, "PNG")
-        else:
-            if SAVE_SFW:
-                img.save(SFW_FOLDER +'/' +filename, "PNG")
+    if CATEGORIZE_NSFW or SAVE_ALL_IMAGES:
+        try:
+            img = Image.open(BytesIO(args['content']))
+            width, height = img.size
+            npixels = width * height
+            nsfw_probability=0
+            if img.mode == "CMYK":
+                img = img.convert("RGB")
+            # Check if it's a palette-based image with transparency
+            if img.mode == "P" and "transparency" in img.info:
+                # Convert to RGBA to handle transparency properly
+                img = img.convert("RGBA")
+            filename = hashlib.sha512(img.tobytes()).hexdigest() + ".png"
+        except UnidentifiedImageError as e:
+            #SVG using cairo in the future
+            db_update_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+            return False
+        except Image.DecompressionBombError as e:
+            db_update_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+            return False
+        except OSError:
+            db_update_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+            return False
+        if SAVE_ALL_IMAGES:
+            img.save(IMAGES_FOLDER+'/' + filename, "PNG")
+        if CATEGORIZE_NSFW and npixels > MIN_NSFW_RES :
+            image = n2.preprocess_image(img, n2.Preprocessing.YAHOO)
+            inputs = np.expand_dims(image, axis=0) 
+            predictions = model.predict(inputs, verbose=0)
+            sfw_probability, nsfw_probability = predictions[0]
+            db_update_url(args['url'], isnsfw=nsfw_probability,db=args['db'])
+            if nsfw_probability>NSFW_MIN_PROBABILITY:
+                print('porn {} {}'.format(nsfw_probability,args['url']))
+                if SAVE_NSFW:
+                    img.save(NSFW_FOLDER +'/'+ filename, "PNG")
+            else:
+                if SAVE_SFW:
+                    img.save(SFW_FOLDER +'/' +filename, "PNG")
     db_update_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
     return True
 
@@ -500,12 +507,13 @@ def content_type_ignore(args):
     return True
 
 def sanitize_content_type(content_type):
-    content_type = content_type.strip()
+    content_type = content_type.strip() 
     content_type = content_type.rstrip()      
-    content_type = re.sub(r'^"(.*)"$', r"\1", content_type)
-    content_type = re.sub(r'^content-type: (.*)"$', r"\1", content_type)
-    content_type = re.sub(r'^content-type:(.*)"$', r"\1", content_type)  
-    content_type = re.sub(r'^(.*?);.*$', r"\1",content_type)
+    content_type = re.sub(r'^"(.*)"$', r"\1", content_type) # remove surrounding quotes if present
+    content_type = re.sub(r'^content-type: (.*)"$', r"\1", content_type) # remove "content-type:" prefix
+    content_type = re.sub(r'^content-type:(.*)"$', r"\1", content_type) # remove "content-type:" prefix  
+    content_type = re.sub(r'^(.*?);.*$', r"\1",content_type) # keep only the type/subtype part
+    content_type = re.sub(r'\s+', '', content_type)  # remove any remaining spaces
     return content_type
 
 def get_page(url,driver,db):
@@ -575,22 +583,29 @@ def initialize_driver():
     options = webdriver.ChromeOptions()
     options.add_argument(f'user-agent={user_agent}')
     prefs = {"download.default_directory": DIRECT_LINK_DOWNLOAD_FOLDER,}
+    if not CATEGORIZE_NSFW and not SAVE_ALL_IMAGES:
+        prefs["profile.managed_default_content_settings.images"] = 2  # disable images
+    if BLOCK_CSS:
+        prefs["profile.managed_default_content_settings.stylesheets"] = 2  # disable CSS
+        prefs["profile.managed_default_content_settings.fonts"] = 2  # disable CSS
     options.add_experimental_option("prefs", prefs)
+    if PERFORMANCE_OPTIMIZED:
+        options.add_argument('--disable-extensions')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-webgl')
+        options.add_argument('--blink-settings=imagesEnabled=false')
     options.add_argument('--ignore-certificate-errors-spki-list')
     options.add_argument('--ignore-ssl-errors')
     options.add_argument("--ignore-certificate-errors")
     options.add_argument("--disable-web-security")
     options.add_argument("--allow-running-insecure-content")
-    #options.add_argument('--disable-webgl')
     #options.add_argument('--disable-webrtc')
     #options.add_argument('--disable-geolocation')
-    #options.add_argument('--disable-gpu')
     #options.add_argument('--disable-infobars')
     #options.add_argument('--disable-popup-blocking')
-    #options.add_argument('--blink-settings=imagesEnabled=false')
-    #options.add_argument('--disable-extensions')
     #options.add_argument('--disable-javascript')
-    #options.add_argument('--disable-dev-shm-usage')
     #options.add_argument('--proxy-server=http://your-proxy-server:port')
     #options.add_argument('--proxy-server=http://'+PROXY_HOST+':'PROXY_PORT)
     driver = webdriver.Chrome(options=options)
@@ -620,7 +635,6 @@ def crawler(db):
 
 def main():
     global model
-    model = n2.make_open_nsfw_model() if CATEGORIZE_NSFW else None
     parser = argparse.ArgumentParser(description="URL scanner and inserter.")
     parser.add_argument(
         "command",

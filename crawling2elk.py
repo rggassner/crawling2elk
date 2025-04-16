@@ -19,6 +19,7 @@ from PIL import Image, UnidentifiedImageError
 from io import BytesIO
 from datetime import datetime, timezone
 from urllib3.exceptions import InsecureRequestWarning
+from collections import Counter
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 warnings.filterwarnings("ignore", category=Warning, message=".*verify_certs=False is insecure.*")
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -69,22 +70,50 @@ def remove_jsessionid_with_semicolon(url):
     cleaned_url = re.sub(pattern, '', url)
     return cleaned_url
 
+def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
+    script_lines = []
+    params = {}
+    for key, value in doc.items():
+        params[key] = value
+        if key == "visited":
+            script_lines.append("""
+                if (ctx._source.visited == null || ctx._source.visited == false) {
+                    ctx._source.visited = params.visited;
+                }
+            """)
+        elif key != "updated_at":
+            script_lines.append(f"""
+                if (ctx._source['{key}'] != params['{key}']) {{
+                    ctx._source['{key}'] = params['{key}'];
+                }}
+            """)
+    # Only update updated_at if any other field changed
+    script_lines.append("""
+        if (ctx._source != params.existing_source_snapshot) {
+            ctx._source.updated_at = params.updated_at;
+        }
+    """)
 
-def db_insert_if_new_url(url='',isopendir='', visited='', source='', content_type='', words='', isnsfw='', resolution='', parent_host='', db=None):
+    return "\n".join(script_lines), params
+
+def db_insert_if_new_url(url='', isopendir='', visited='', source='', content_type='', words='',
+                         isnsfw='', resolution='', parent_host='', db=None):
     try:
         host = urlsplit(url)[1]
     except ValueError:
         return False
+
     url = remove_jsessionid_with_semicolon(url)
     now_iso = datetime.now(timezone.utc).isoformat()
-    # Ensure defaults
+
     try:
         doc = {
             "url": url,
             "host": host,
             "random_bucket": random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1),
-            "updated_at": now_iso,
-            "source": source}
+            "source": source
+        }
+
         if content_type != '':
             doc["content_type"] = content_type
         if words != '':
@@ -97,27 +126,49 @@ def db_insert_if_new_url(url='',isopendir='', visited='', source='', content_typ
             doc["resolution"] = int(resolution) if str(resolution).isdigit() else 0
         if parent_host != '':
             doc["parent_host"] = parent_host
-        if source != '':
-            doc["source"] = source
-        script_lines = []
-        for key in doc:
-            script_lines.append(f"ctx._source['{key}'] = params['{key}'];")
+
         if visited != '':
             doc["visited"] = visited
-            # Only set visited if it doesn't exist or is false
-            script_lines.append("""
-                if (ctx._source.visited == null || ctx._source.visited == false) {
-                    ctx._source.visited = params.visited;
-                }
-            """)
+
+        script_lines = ["boolean has_updated = false;"]
+
+        for key in doc:
+            if key == "visited":
+                script_lines.append("""
+                    if (ctx._source.visited == null || ctx._source.visited == false) {
+                        ctx._source.visited = params.visited;
+                        has_updated = true;
+                    }
+                """)
+            else:
+                script_lines.append(f"""
+                    if (params.containsKey('{key}') && (
+                        !ctx._source.containsKey('{key}') || ctx._source['{key}'] != params['{key}']
+                    )) {{
+                        ctx._source['{key}'] = params['{key}'];
+                        has_updated = true;
+                    }}
+                """)
+
+        # Only update updated_at if something was actually changed
+        script_lines.append("""
+            if (has_updated) {
+                ctx._source.updated_at = params.updated_at;
+            }
+        """)
+
         script = "\n".join(script_lines)
-        # Ensure upsert has creation timestamp
+
+        # upsert always gets created_at
         upsert_doc = doc.copy()
         upsert_doc["created_at"] = now_iso
-        # Use a hashed ID instead of the raw URL
+        upsert_doc["updated_at"] = now_iso
+
         doc_id = hash_url(url)
+        doc["updated_at"] = now_iso  # only used in script if has_updated
+
         db.con.update(
-            index="urls",
+            index=URLS_INDEX,
             id=doc_id,
             body={
                 "script": {
@@ -133,6 +184,7 @@ def db_insert_if_new_url(url='',isopendir='', visited='', source='', content_typ
         print(f"[Elasticsearch] Error inserting URL '{url}':", e)
         return False
 
+
 def db_insert_email(url='', email='', db=None):
     if not db or not db.con:
         print("Elasticsearch connection not available.")
@@ -147,7 +199,7 @@ def db_insert_email(url='', email='', db=None):
         }
         # Perform the upsert (insert if not exists, update otherwise)
         db.con.update(
-            index="emails",
+            index=EMAILS_INDEX,
             id=doc_id,
             body={
                 "doc": doc,
@@ -159,91 +211,109 @@ def db_insert_email(url='', email='', db=None):
         print("[Elasticsearch] Error inserting email:", e)
         return False
 
-def db_update_url(url='', content_type='', visited='', isopendir='', isnsfw='', words='', source='',resolution='',parent_host='', db=None):
+def db_update_url(url='', content_type='', visited='', isopendir='', isnsfw='', words='',
+                  source='', resolution='', parent_host='', db=None):
     now_iso = datetime.now(timezone.utc).isoformat()
-    host=urlsplit(url)[1]
+    host = urlsplit(url)[1]
 
-    def update_url_entry(doc_url, words=words, visited=visited, isnsfw=isnsfw, content_type=content_type, source=source, isopendir=isopendir,parent_host=parent_host,resolution=resolution, override_source=None, override_words=None):
+    def update_url_entry(doc_url, words=words, visited=visited, isnsfw=isnsfw,
+                         content_type=content_type, source=source, isopendir=isopendir,
+                         parent_host=parent_host, resolution=resolution,
+                         override_source=None, override_words=None):
+
         if not doc_url:
             return
 
-        # Ensure `words` is always set, even if empty
         final_words = override_words if override_words not in [None, ''] else words
         if final_words in [None, '']:
-            final_words = ''  # Explicitly set empty string
+            final_words = ''
 
         doc = {
-            "updated_at": now_iso,
-            "random_bucket": random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1),
             "url": doc_url,
+            "random_bucket": random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
         }
+
         if final_words != '':
             doc["words"] = final_words
-
         if resolution != '':
             doc["resolution"] = resolution
-
         if host != '':
-            doc["host"] = host 
-
+            doc["host"] = host
         if parent_host != '':
             doc["parent_host"] = parent_host
-
+        if content_type != '':
+            doc["content_type"] = content_type
+        if override_source is not None or source:
+            doc["source"] = override_source if override_source is not None else source
+        if isopendir != '':
+            doc["isopendir"] = bool(isopendir)
+        if isnsfw != '':
+            doc["isnsfw"] = float(isnsfw)
         if visited != '':
             doc["visited"] = bool(int(visited)) if isinstance(visited, str) and visited.isdigit() else bool(visited)
 
-        if content_type != '':
-            doc["content_type"] = content_type
+        doc["updated_at"] = now_iso
 
-        if override_source is not None or source:
-            doc["source"] = override_source if override_source is not None else source
+        # upsert needs creation
+        upsert_doc = doc.copy()
+        upsert_doc["created_at"] = now_iso
 
-        if isopendir != '':
-            doc["isopendir"] = bool(isopendir)
+        # Build painless script with conditional updates
+        script_lines = ["boolean has_updated = false;"]
 
-        if isnsfw != '':
-            doc["isnsfw"] = float(isnsfw)
+        for key in doc:
+            if key == "visited":
+                script_lines.append("""
+                    if (ctx._source.visited == null || ctx._source.visited == false) {
+                        ctx._source.visited = params.visited;
+                        has_updated = true;
+                    }
+                """)
+            else:
+                script_lines.append(f"""
+                    if (params.containsKey('{key}') && (
+                        !ctx._source.containsKey('{key}') || ctx._source['{key}'] != params['{key}']
+                    )) {{
+                        ctx._source['{key}'] = params['{key}'];
+                        has_updated = true;
+                    }}
+                """)
+
+        # Only set updated_at if something actually changed
+        script_lines.append("""
+            if (has_updated) {
+                ctx._source.updated_at = params.updated_at;
+            }
+        """)
+
+        script = "\n".join(script_lines)
 
         try:
-            upsert_doc = doc.copy()
-            upsert_doc["created_at"] = now_iso
-
             if db and db.con:
                 doc_id = hash_url(doc_url)
-
                 db.con.update(
-                    index="urls",
+                    index=URLS_INDEX,
                     id=doc_id,
                     body={
-                        "doc": doc,
-                        "doc_as_upsert": True,
+                        "script": {
+                            "source": script,
+                            "lang": "painless",
+                            "params": doc
+                        },
                         "upsert": upsert_doc
                     }
                 )
         except Exception as e:
             print(f"[Elasticsearch] Failed to update URL '{doc_url}':", e)
 
-    # Update the original URL
+    # Update main URL
     update_url_entry(url, words=words)
 
-    # Try the version without trailing slash if present — only override source, not words
+    # Try version without trailing slash
     if url.endswith('/'):
         update_url_entry(url[:-1], override_source='endswithslash')
 
     return True
-
-def get_words_from_soup(soup):
-    output = ""
-    text = soup.find_all(string=True)
-    for t in text:
-        if t.parent.name not in soup_tag_blocklist:
-            output += f"{t} "
-    if WORDS_REMOVE_SPECIAL_CHARS:
-        output = re.sub(r'[^\w\s]', ' ', output, flags=re.UNICODE)
-    if WORDS_TO_LOWER:
-        output = output.lower()
-    words = [word for word in output.split() if len(word) > WORDS_MIN_LEN]
-    return sorted(set(words))
 
 
 def get_words(text: bytes | str) -> list[str]:
@@ -254,23 +324,26 @@ def get_words(text: bytes | str) -> list[str]:
             text = text.decode('utf-8', errors='replace')
         except Exception:
             return []
+    return extract_top_words_from_text(text)
+
+def get_words_from_soup(soup) -> list[str]:
+    text_parts = [
+        t for t in soup.find_all(string=True)
+        if t.parent.name not in soup_tag_blocklist
+    ]
+    combined_text = " ".join(text_parts)
+    return extract_top_words_from_text(combined_text)
+
+def extract_top_words_from_text(text: str) -> list[str]:
     if WORDS_REMOVE_SPECIAL_CHARS:
         text = re.sub(r'[^\w\s]', ' ', text, flags=re.UNICODE)
     if WORDS_TO_LOWER:
         text = text.lower()
-    words = [
-        word for word in text.split()
-        if WORDS_MIN_LEN < len(word) <= WORDS_MAX_LEN
-    ]
-    return sorted(set(words))
 
-def get_directory_tree(url):
-    #Host will have scheme, hostname and port
-    host='://'.join(urlsplit(url)[:2])
-    dtree=[]
-    for iter in range(1,len(PurePosixPath(unquote(urlparse(url).path)).parts[0:])):
-        dtree.append(str(host+'/'+'/'.join(PurePosixPath(unquote(urlparse(url).path)).parts[1:-iter])))
-    return dtree
+    words = [word for word in text.split() if WORDS_MIN_LEN < len(word) <= WORDS_MAX_LEN]
+    most_common = Counter(words).most_common(WORDS_MAX_WORDS)
+    return [word for word, _ in most_common]
+
 
 def is_open_directory(content, content_url):
     host=urlsplit(content_url)[1]
@@ -391,6 +464,14 @@ def function_for_content_type(regexp_list):
             content_type_functions.append((re.compile(regexp, flags=re.I | re.U), f))
         return f
     return get_content_type_function
+
+def get_directory_tree(url):
+    #Host will have scheme, hostname and port
+    host='://'.join(urlsplit(url)[:2])
+    dtree=[]
+    for iter in range(1,len(PurePosixPath(unquote(urlparse(url).path)).parts[0:])):
+        dtree.append(str(host+'/'+'/'.join(PurePosixPath(unquote(urlparse(url).path)).parts[1:-iter])))
+    return dtree
 
 def insert_directory_tree(content_url,db):
     parent_host=urlsplit(content_url)[1]
@@ -623,7 +704,7 @@ def crawler(db):
                 not is_url_block_listed(target_url['url'])
             ):
                 try:
-                    print(target_url['url'])
+                    print('url {} host {}'.format(target_url['url'],target_url['host']))
                     del driver.requests
                     get_page(target_url['url'], driver,db)
                     if HUNT_OPEN_DIRECTORIES:

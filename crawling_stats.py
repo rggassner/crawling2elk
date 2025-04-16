@@ -32,7 +32,7 @@ def execute_query(con, query, fetch_one=False, fetch_all=False):
 
 def db_count_urls(db):
     try:
-        res = db.search(index="urls", body={"track_total_hits": True, "query": {"match_all": {}}})
+        res = db.search(index=URLS_INDEX, body={"track_total_hits": True, "query": {"match_all": {}}})
         return res["hits"]["total"]["value"]
     except Exception as e:
         print("[Elasticsearch] Error counting URLs:", e)
@@ -50,7 +50,7 @@ def db_get_unique_domain_count(db):
                 }
             }
         }
-        res = db.search(index="urls", body=query)
+        res = db.search(index=URLS_INDEX, body=query)
         return res["aggregations"]["unique_hosts"]["value"]
     except Exception as e:
         print("[Elasticsearch] Error counting unique domains:", e)
@@ -66,7 +66,7 @@ def db_get_visit_count(db):
             },
             "track_total_hits": True
         }
-        res = db.search(index="urls", body=query)
+        res = db.search(index=URLS_INDEX, body=query)
         return res["hits"]["total"]["value"]
     except Exception as e:
         print("[Elasticsearch] Error counting visited URLs:", e)
@@ -84,7 +84,7 @@ def db_get_email_count(db):
                 }
             }
         }
-        res = db.search(index="emails", body=query)
+        res = db.search(index=EMAILS_INDEX, body=query)
         return res["aggregations"]["unique_emails"]["value"]
     except Exception as e:
         print("[Elasticsearch] Error counting unique emails:", e)
@@ -106,7 +106,7 @@ def db_get_content_type_count(db):
                 }
             }
         }
-        res = db.search(index="urls", body=query)
+        res = db.search(index=URLS_INDEX, body=query)
         return [(bucket["key"], bucket["doc_count"]) for bucket in res["aggregations"]["top_content_types"]["buckets"]]
     except Exception as e:
         print("[Elasticsearch] Error getting content type counts:", e)
@@ -128,7 +128,7 @@ def db_get_top_domain(db):
                 }
             }
         }
-        res = db.search(index="urls", body=query)
+        res = db.search(index=URLS_INDEX, body=query)
         return [(bucket["key"], bucket["doc_count"]) for bucket in res["aggregations"]["top_hosts"]["buckets"]]
     except Exception as e:
         print("[Elasticsearch] Error getting top domains:", e)
@@ -170,7 +170,7 @@ def db_get_porn_domains(db):
             }
         }
 
-        res = db.search(index="urls", body=query)
+        res = db.search(index=URLS_INDEX, body=query)
         results = []
 
         for bucket in res["aggregations"]["group_by_parent"]["buckets"]:
@@ -204,7 +204,7 @@ def db_get_porn_urls(db):
             "_source": ["isnsfw", "url"]
         }
 
-        res = db.search(index="urls", body=query)
+        res = db.search(index=URLS_INDEX, body=query)
         return [(hit["_source"]["isnsfw"], hit["_source"]["url"]) for hit in res["hits"]["hits"]]
 
     except Exception as e:
@@ -223,7 +223,7 @@ def db_get_open_dir(db):
             "_source": ["url"],
             "size": 10000  # Adjust as needed or implement scroll for large datasets
         }
-        res = db.search(index="urls", body=query)
+        res = db.search(index=URLS_INDEX, body=query)
         return [hit["_source"]["url"] for hit in res["hits"]["hits"] if "url" in hit["_source"]]
     except Exception as e:
         print("[Elasticsearch] Error getting open directories:", e)
@@ -244,7 +244,7 @@ def db_get_all_hosts(db):
         "_source": ["host", "parent_host"]
     }
     try:
-        res = db.search(index="urls", body=query)
+        res = db.search(index=URLS_INDEX, body=query)
         hits = res.get("hits", {}).get("hits", [])
         hosts = set()
         for hit in hits:
@@ -286,7 +286,7 @@ def db_get_all_relations(con):
         }
 
         # Initial search
-        result = con.search(index="urls", body=query_body, scroll="2m")
+        result = con.search(index=URLS_INDEX, body=query_body, scroll="2m")
         scroll_id = result["_scroll_id"]
         hits = result["hits"]["hits"]
 
@@ -480,4 +480,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

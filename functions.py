@@ -107,7 +107,7 @@ def db_create_database(initial_url, db):
 
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    # Define mappings for the 'urls' index
+    # Define mappings for the URLS_INDEX
     urls_mapping = {
         "mappings": {
             "properties": {
@@ -128,7 +128,7 @@ def db_create_database(initial_url, db):
         }
     }
 
-    # Define mappings for the 'emails' index
+    # Define mappings for the EMAILS_INDEX
     emails_mapping = {
         "mappings": {
             "properties": {
@@ -139,12 +139,12 @@ def db_create_database(initial_url, db):
     }
 
     try:
-        if not db.con.indices.exists(index="urls"):
-            db.con.indices.create(index="urls", body=urls_mapping)
-            print("Created 'urls' index.")
-        if not db.con.indices.exists(index="emails"):
-            db.con.indices.create(index="emails", body=emails_mapping)
-            print("Created 'emails' index.")
+        if not db.con.indices.exists(index=URLS_INDEX):
+            db.con.indices.create(index=URLS_INDEX, body=urls_mapping)
+            print("Created {} index.".format(URLS_INDEX))
+        if not db.con.indices.exists(index=EMAILS_INDEX):
+            db.con.indices.create(index=EMAILS_INDEX, body=emails_mapping)
+            print("Created {} index.".format(EMAILS_INDEX))
 
         # Insert the initial URL as a document
         doc = {
@@ -164,8 +164,8 @@ def db_create_database(initial_url, db):
         # Use hashed URL as document ID
         doc_id = hash_url(initial_url)
 
-        db.con.index(index="urls", id=doc_id, document=doc)
-        print(f"Inserted initial URL into 'urls' index with hash ID: {doc_id}")
+        db.con.index(index=URLS_INDEX, id=doc_id, document=doc)
+        print("Inserted initial URL into {}".format(URLS_INDEX))
         return True
     except Exception as e:
         print("Error creating indices or inserting initial document:", e)
@@ -203,7 +203,7 @@ def get_random_unvisited_domains(db):
             }
 
             try:
-                response = db.con.search(index="urls", body=query_body)
+                response = db.con.search(index=URLS_INDEX, body=query_body)
                 results = response.get('hits', {}).get('hits', [])
 
                 if results:
@@ -646,4 +646,3 @@ content_type_all_others_regex = [
         r"^video/x-msvideo$",
         r"^video/vnd\.dlna\.mpeg-tts$",
     ]
-

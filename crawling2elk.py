@@ -97,7 +97,7 @@ def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
     return "\n".join(script_lines), params
 
 def db_insert_if_new_url(url='', isopendir='', visited='', source='', content_type='', words='',
-                         isnsfw='', resolution='', parent_host='', db=None):
+                         isnsfw='', resolution='', parent_host='', db=None, debug=False):
     try:
         host = urlsplit(url)[1]
     except ValueError:
@@ -105,72 +105,95 @@ def db_insert_if_new_url(url='', isopendir='', visited='', source='', content_ty
 
     url = remove_jsessionid_with_semicolon(url)
     now_iso = datetime.now(timezone.utc).isoformat()
+    doc_id = hash_url(url)
 
     try:
-        doc = {
+        # Check for existing doc if debugging
+        existing_doc = None
+        if debug:
+            try:
+                existing_doc = db.con.get(index=URLS_INDEX, id=doc_id)["_source"]
+            except Exception:
+                pass
+
+        # Insert-only fields
+        insert_only_fields = {
             "url": url,
-            "host": host,
-            "random_bucket": random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1),
-            "source": source
+            "host": host
         }
 
-        if content_type != '':
-            doc["content_type"] = content_type
-        if words != '':
-            doc["words"] = words
-        if isopendir != '':
-            doc["isopendir"] = isopendir
-        if isnsfw != '':
-            doc["isnsfw"] = float(isnsfw)
-        if resolution != '':
-            doc["resolution"] = int(resolution) if str(resolution).isdigit() else 0
-        if parent_host != '':
-            doc["parent_host"] = parent_host
+        if existing_doc is None:
+            insert_only_fields["random_bucket"] = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
+            if source:
+                insert_only_fields["source"] = source
+            if parent_host:
+                insert_only_fields["parent_host"] = parent_host
 
+        # Fields that may be updated
+        doc = {}
+        if content_type: doc["content_type"] = content_type
+        if words: doc["words"] = words
+        if isopendir: doc["isopendir"] = isopendir
+        if isnsfw: doc["isnsfw"] = float(isnsfw)
+        if resolution:
+            doc["resolution"] = int(resolution) if str(resolution).isdigit() else 0
         if visited != '':
             doc["visited"] = visited
+        elif "visited" not in insert_only_fields:
+            insert_only_fields["visited"] = False  # Default for new documents
 
+        # Debug: show diff
+        if debug:
+            if existing_doc:
+                for key, new_value in {**insert_only_fields, **doc}.items():
+                    if key in ("random_bucket", "source", "parent_host"):
+                        continue
+                    old_value = existing_doc.get(key, None)
+                    if key != "visited" and old_value != new_value:
+                        print(f"[DEBUG] INSERT - Comparing update for URL: {url}")
+                        print(f"  🔄 {key}: '{old_value}' ➡️ '{new_value}'")
+            else:
+                print(f"[DEBUG] INSERT - Comparing update for URL: {url}")
+                print("  📌 New document")
+
+        # Build the update script
         script_lines = ["boolean has_updated = false;"]
 
         for key in doc:
             if key == "visited":
                 script_lines.append("""
-                    if (ctx._source.visited == null || ctx._source.visited == false) {
+                    if (!ctx._source.containsKey('visited') || ctx._source.visited == false) {
                         ctx._source.visited = params.visited;
                         has_updated = true;
                     }
                 """)
             else:
                 script_lines.append(f"""
-                    if (params.containsKey('{key}') && (
-                        !ctx._source.containsKey('{key}') || ctx._source['{key}'] != params['{key}']
-                    )) {{
-                        ctx._source['{key}'] = params['{key}'];
-                        has_updated = true;
+                    if (params.containsKey('{key}')) {{
+                        def old_val = ctx._source.containsKey('{key}') ? ctx._source['{key}'] : null;
+                        if (old_val != params['{key}']) {{
+                            ctx._source['{key}'] = params['{key}'];
+                            has_updated = true;
+                        }}
                     }}
                 """)
 
-        # Only update updated_at if something was actually changed
-        script_lines.append("""
-            if (has_updated) {
-                ctx._source.updated_at = params.updated_at;
-            }
-        """)
-
+        # Only update timestamp if something changed
+        script_lines.append("if (has_updated) { ctx._source.updated_at = params.updated_at; }")
         script = "\n".join(script_lines)
 
-        # upsert always gets created_at
-        upsert_doc = doc.copy()
+        # Combine all fields into upsert
+        upsert_doc = {**insert_only_fields, **doc}
         upsert_doc["created_at"] = now_iso
         upsert_doc["updated_at"] = now_iso
+        doc["updated_at"] = now_iso
 
-        doc_id = hash_url(url)
-        doc["updated_at"] = now_iso  # only used in script if has_updated
-
+        # Perform upsert safely
         db.con.update(
             index=URLS_INDEX,
             id=doc_id,
             body={
+                "scripted_upsert": True,
                 "script": {
                     "source": script,
                     "lang": "painless",
@@ -180,6 +203,7 @@ def db_insert_if_new_url(url='', isopendir='', visited='', source='', content_ty
             }
         )
         return True
+
     except Exception as e:
         print(f"[Elasticsearch] Error inserting URL '{url}':", e)
         return False
@@ -211,58 +235,60 @@ def db_insert_email(url='', email='', db=None):
         print("[Elasticsearch] Error inserting email:", e)
         return False
 
-def db_update_url(url='', content_type='', visited='', isopendir='', isnsfw='', words='',
-                  source='', resolution='', parent_host='', db=None):
+def db_update_url(url='', visited='', content_type='', words='', isopendir='', isnsfw='',
+                  resolution='', source='', parent_host='', random_bucket=None, db=None, debug=False):
+    url = remove_jsessionid_with_semicolon(url)
+    doc_id = hash_url(url)
     now_iso = datetime.now(timezone.utc).isoformat()
-    host = urlsplit(url)[1]
+    doc = {}
+    if debug:
+        try:
+            existing_doc = db.con.get(index=URLS_INDEX, id=doc_id)["_source"]
+        except Exception:
+            existing_doc = {}
+    else:
+        existing_doc = {}  # avoid the GET if not debugging
 
-    def update_url_entry(doc_url, words=words, visited=visited, isnsfw=isnsfw,
-                         content_type=content_type, source=source, isopendir=isopendir,
-                         parent_host=parent_host, resolution=resolution,
-                         override_source=None, override_words=None):
+    if visited != '':
+        doc["visited"] = visited
+    if content_type != '':
+        doc["content_type"] = content_type
+    if words != '':
+        doc["words"] = words
+    if isopendir != '':
+        doc["isopendir"] = isopendir
+    if isnsfw != '':
+        doc["isnsfw"] = float(isnsfw)
+    if resolution != '':
+        doc["resolution"] = int(resolution) if str(resolution).isdigit() else 0
+    if source != '' and "source" not in existing_doc:
+        doc["source"] = source
+    if parent_host != '' and "parent_host" not in existing_doc:
+        doc["parent_host"] = parent_host
+    if "host" not in existing_doc:
+        doc["host"] = urlsplit(url).netloc
+    if random_bucket is not None and "random_bucket" not in existing_doc:
+        doc["random_bucket"] = random_bucket
 
-        if not doc_url:
-            return
+    # 🔍 Debug diff print
+    if debug and existing_doc:
+        for key, new_value in doc.items():
+            old_value = existing_doc.get(key, None)
+            if key != "visited" and old_value != new_value:
+                print(f"[DEBUG] UPDATE Comparing update for URL : {url}")
+                print(f"  🔄 {key}: '{old_value}' ➡️ '{new_value}'")
 
-        final_words = override_words if override_words not in [None, ''] else words
-        if final_words in [None, '']:
-            final_words = ''
-
-        doc = {
-            "url": doc_url,
-            "random_bucket": random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
-        }
-
-        if final_words != '':
-            doc["words"] = final_words
-        if resolution != '':
-            doc["resolution"] = resolution
-        if host != '':
-            doc["host"] = host
-        if parent_host != '':
-            doc["parent_host"] = parent_host
-        if content_type != '':
-            doc["content_type"] = content_type
-        if override_source is not None or source:
-            doc["source"] = override_source if override_source is not None else source
-        if isopendir != '':
-            doc["isopendir"] = bool(isopendir)
-        if isnsfw != '':
-            doc["isnsfw"] = float(isnsfw)
-        if visited != '':
-            doc["visited"] = bool(int(visited)) if isinstance(visited, str) and visited.isdigit() else bool(visited)
-
-        doc["updated_at"] = now_iso
-
-        # upsert needs creation
-        upsert_doc = doc.copy()
-        upsert_doc["created_at"] = now_iso
-
-        # Build painless script with conditional updates
+    try:
         script_lines = ["boolean has_updated = false;"]
-
         for key in doc:
-            if key == "visited":
+            if key in ["host", "parent_host", "source", "random_bucket"]:
+                script_lines.append(f"""
+                    if (!ctx._source.containsKey('{key}')) {{
+                        ctx._source['{key}'] = params['{key}'];
+                        has_updated = true;
+                    }}
+                """)
+            elif key == "visited":
                 script_lines.append("""
                     if (ctx._source.visited == null || ctx._source.visited == false) {
                         ctx._source.visited = params.visited;
@@ -279,41 +305,32 @@ def db_update_url(url='', content_type='', visited='', isopendir='', isnsfw='', 
                     }}
                 """)
 
-        # Only set updated_at if something actually changed
         script_lines.append("""
             if (has_updated) {
                 ctx._source.updated_at = params.updated_at;
             }
         """)
-
         script = "\n".join(script_lines)
 
-        try:
-            if db and db.con:
-                doc_id = hash_url(doc_url)
-                db.con.update(
-                    index=URLS_INDEX,
-                    id=doc_id,
-                    body={
-                        "script": {
-                            "source": script,
-                            "lang": "painless",
-                            "params": doc
-                        },
-                        "upsert": upsert_doc
-                    }
-                )
-        except Exception as e:
-            print(f"[Elasticsearch] Failed to update URL '{doc_url}':", e)
+        doc["updated_at"] = now_iso
 
-    # Update main URL
-    update_url_entry(url, words=words)
+        db.con.update(
+            index=URLS_INDEX,
+            id=doc_id,
+            body={
+                "script": {
+                    "source": script,
+                    "lang": "painless",
+                    "params": doc
+                },
+                "upsert": {**doc, "created_at": now_iso}
+            }
+        )
+        return True
 
-    # Try version without trailing slash
-    if url.endswith('/'):
-        update_url_entry(url[:-1], override_source='endswithslash')
-
-    return True
+    except Exception as e:
+        print(f"[Elasticsearch] UPDATE - Error updating URL '{url}':", e)
+        return False
 
 
 def get_words(text: bytes | str) -> list[str]:
@@ -351,6 +368,7 @@ def is_open_directory(content, content_url):
     if re.findall(pattern,content):
         print('### Is open directory -{}-'.format(content_url))
         return True
+    return False
 
 def function_for_url(regexp_list):
     def get_url_function(f):
@@ -539,7 +557,7 @@ def content_type_images(args):
             inputs = np.expand_dims(image, axis=0) 
             predictions = model.predict(inputs, verbose=0)
             sfw_probability, nsfw_probability = predictions[0]
-            db_update_url(args['url'], isnsfw=nsfw_probability,db=args['db'])
+            db_update_url(args['url'], isnsfw=nsfw_probability,isopendir=False,db=args['db'])
             if nsfw_probability>NSFW_MIN_PROBABILITY:
                 print('porn {} {}'.format(nsfw_probability,args['url']))
                 if SAVE_NSFW:
@@ -704,7 +722,7 @@ def crawler(db):
                 not is_url_block_listed(target_url['url'])
             ):
                 try:
-                    print('url {} host {}'.format(target_url['url'],target_url['host']))
+                    print('url {}'.format(target_url['url']))
                     del driver.requests
                     get_page(target_url['url'], driver,db)
                     if HUNT_OPEN_DIRECTORIES:

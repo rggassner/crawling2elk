@@ -189,15 +189,23 @@ def get_random_unvisited_domains(db):
                         "minimum_should_match": 1
                     }
                 },
-                "collapse": {"field": "host"},
-                "sort": {
-                    "_script": {
-                        "type": "number",
-                        "script": {
-                            "lang": "painless",
-                            "source": "Math.random()"
-                        },
-                        "order": "asc"
+                "collapse": {
+                    "field": "host",
+                    "inner_hits": {
+                        "name": "random_hit",
+                        "size": 1,
+                        "sort": [
+                            {
+                                "_script": {
+                                    "type": "number",
+                                    "script": {
+                                        "lang": "painless",
+                                        "source": "Math.random()"
+                                    },
+                                    "order": "asc"
+                                }
+                            }
+                        ]
                     }
                 }
             }
@@ -207,7 +215,10 @@ def get_random_unvisited_domains(db):
                 results = response.get('hits', {}).get('hits', [])
 
                 if results:
-                    return [{"url": r["_source"]["url"], "host": r["_source"]["host"]} for r in results]
+                    return [{
+                        "url": r["inner_hits"]["random_hit"]["hits"]["hits"][0]["_source"]["url"],
+                        "host": r["_source"]["host"]
+                    } for r in results]
 
             except NotFoundError as e:
                 if "index_not_found_exception" in str(e):
@@ -219,6 +230,7 @@ def get_random_unvisited_domains(db):
                 print(f"[Attempt {attempt+1}] Elasticsearch request error:", e)
             except Exception as e:
                 print(f"[Attempt {attempt+1}] Elasticsearch unknown error:", e)
+
             time.sleep(ES_RETRY_DELAY)
 
         print("No unvisited domains found after retries.")
@@ -226,8 +238,6 @@ def get_random_unvisited_domains(db):
     except Exception as e:
         print("Unhandled error:", e)
     return []
-
-
 
 content_type_html_regex=[
         r"^text/html$",
@@ -319,6 +329,7 @@ content_type_plain_text_regex = [
         r"^app/json$",
         r"^text/x-sh$",
         r"^text/json$",
+        r"^text/yaml$",
         r"^text/x-js$",
         r"^text/vcard$",
         r"^text/x-tex$",
@@ -646,3 +657,4 @@ content_type_all_others_regex = [
         r"^video/x-msvideo$",
         r"^video/vnd\.dlna\.mpeg-tts$",
     ]
+

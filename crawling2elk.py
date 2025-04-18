@@ -235,104 +235,6 @@ def db_insert_email(url='', email='', db=None):
         print("[Elasticsearch] Error inserting email:", e)
         return False
 
-def db_update_url(url='', visited='', content_type='', words='', isopendir='', isnsfw='',
-                  resolution='', source='', parent_host='', random_bucket=None, db=None, debug=False):
-    url = remove_jsessionid_with_semicolon(url)
-    doc_id = hash_url(url)
-    now_iso = datetime.now(timezone.utc).isoformat()
-    doc = {}
-    if debug:
-        try:
-            existing_doc = db.con.get(index=URLS_INDEX, id=doc_id)["_source"]
-        except Exception:
-            existing_doc = {}
-    else:
-        existing_doc = {}  # avoid the GET if not debugging
-
-    if visited != '':
-        doc["visited"] = visited
-    if content_type != '':
-        doc["content_type"] = content_type
-    if words != '':
-        doc["words"] = words
-    if isopendir != '':
-        doc["isopendir"] = isopendir
-    if isnsfw != '':
-        doc["isnsfw"] = float(isnsfw)
-    if resolution != '':
-        doc["resolution"] = int(resolution) if str(resolution).isdigit() else 0
-    if source != '' and "source" not in existing_doc:
-        doc["source"] = source
-    if parent_host != '' and "parent_host" not in existing_doc:
-        doc["parent_host"] = parent_host
-    if "host" not in existing_doc:
-        doc["host"] = urlsplit(url).netloc
-    if random_bucket is not None and "random_bucket" not in existing_doc:
-        doc["random_bucket"] = random_bucket
-
-    # 🔍 Debug diff print
-    if debug and existing_doc:
-        for key, new_value in doc.items():
-            old_value = existing_doc.get(key, None)
-            if key != "visited" and old_value != new_value:
-                print(f"[DEBUG] UPDATE Comparing update for URL : {url}")
-                print(f"  🔄 {key}: '{old_value}' ➡️ '{new_value}'")
-
-    try:
-        script_lines = ["boolean has_updated = false;"]
-        for key in doc:
-            if key in ["host", "parent_host", "source", "random_bucket"]:
-                script_lines.append(f"""
-                    if (!ctx._source.containsKey('{key}')) {{
-                        ctx._source['{key}'] = params['{key}'];
-                        has_updated = true;
-                    }}
-                """)
-            elif key == "visited":
-                script_lines.append("""
-                    if (ctx._source.visited == null || ctx._source.visited == false) {
-                        ctx._source.visited = params.visited;
-                        has_updated = true;
-                    }
-                """)
-            else:
-                script_lines.append(f"""
-                    if (params.containsKey('{key}') && (
-                        !ctx._source.containsKey('{key}') || ctx._source['{key}'] != params['{key}']
-                    )) {{
-                        ctx._source['{key}'] = params['{key}'];
-                        has_updated = true;
-                    }}
-                """)
-
-        script_lines.append("""
-            if (has_updated) {
-                ctx._source.updated_at = params.updated_at;
-            }
-        """)
-        script = "\n".join(script_lines)
-
-        doc["updated_at"] = now_iso
-
-        db.con.update(
-            index=URLS_INDEX,
-            id=doc_id,
-            body={
-                "script": {
-                    "source": script,
-                    "lang": "painless",
-                    "params": doc
-                },
-                "upsert": {**doc, "created_at": now_iso}
-            }
-        )
-        return True
-
-    except Exception as e:
-        print(f"[Elasticsearch] UPDATE - Error updating URL '{url}':", e)
-        return False
-
-
 def get_words(text: bytes | str) -> list[str]:
     if not text:
         return []
@@ -512,7 +414,7 @@ def content_type_download(args):
     if EXTRACT_WORDS:
         words = get_words_from_soup(soup)
     isopendir = is_open_directory(str(soup), args['url'])
-    db_update_url(url=args['url'],content_type=args['content_type'],isopendir=isopendir,visited=True,words=words,source='content_type_html_regex',parent_host=args['parent_host'],db=args['db'])
+    db_insert_if_new_url(url=args['url'],content_type=args['content_type'],isopendir=isopendir,visited=True,words=words,source='content_type_html_regex',parent_host=args['parent_host'],db=args['db'])
     return True
 
 @function_for_content_type(content_type_plain_text_regex)
@@ -520,7 +422,7 @@ def content_type_download(args):
     words = ''
     if EXTRACT_WORDS:
         words = get_words(args['content'])
-    db_update_url(url=args['url'],content_type=args['content_type'],isopendir=False,visited=True,words=words,source='content_type_plain_text_regex',parent_host=args['parent_host'],db=args['db'])
+    db_insert_if_new_url(url=args['url'],content_type=args['content_type'],isopendir=False,visited=True,words=words,source='content_type_plain_text_regex',parent_host=args['parent_host'],db=args['db'])
     return True
 
 @function_for_content_type(content_type_image_regex)
@@ -542,13 +444,13 @@ def content_type_images(args):
             filename = hashlib.sha512(img.tobytes()).hexdigest() + ".png"
         except UnidentifiedImageError as e:
             #SVG using cairo in the future
-            db_update_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+            db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
             return False
         except Image.DecompressionBombError as e:
-            db_update_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+            db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
             return False
         except OSError:
-            db_update_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+            db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
             return False
         if SAVE_ALL_IMAGES:
             img.save(IMAGES_FOLDER+'/' + filename, "PNG")
@@ -557,7 +459,7 @@ def content_type_images(args):
             inputs = np.expand_dims(image, axis=0) 
             predictions = model.predict(inputs, verbose=0)
             sfw_probability, nsfw_probability = predictions[0]
-            db_update_url(args['url'], isnsfw=nsfw_probability,isopendir=False,db=args['db'])
+            db_insert_if_new_url(args['url'],content_type=args['content_type'],source='content_type_image_regex',visited=True,parent_host=args['parent_host'],isnsfw=nsfw_probability,isopendir=False,resolution=npixels, db=args['db'])
             if nsfw_probability>NSFW_MIN_PROBABILITY:
                 print('porn {} {}'.format(nsfw_probability,args['url']))
                 if SAVE_NSFW:
@@ -565,7 +467,7 @@ def content_type_images(args):
             else:
                 if SAVE_SFW:
                     img.save(SFW_FOLDER +'/' +filename, "PNG")
-    db_update_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+    db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
     return True
 
 @function_for_content_type(content_type_midi_regex)
@@ -575,7 +477,7 @@ def content_type_midis(args):
         f = open(MIDIS_FOLDER+'/'+filename, "wb")
         f.write(args['content'])
         f.close()
-    db_update_url(url=args['url'], content_type=args['content_type'],source='content_type_midi_regex',isopendir=False, visited=True,parent_host=args['parent_host'],db=args['db'])
+    db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_midi_regex',isopendir=False, visited=True,parent_host=args['parent_host'],db=args['db'])
     return True
 
 @function_for_content_type(content_type_audio_regex)
@@ -585,12 +487,12 @@ def content_type_midis(args):
         f = open(AUDIOS_FOLDER+'/'+filename, "wb")
         f.write(args['content'])
         f.close()
-    db_update_url(url=args['url'], content_type=args['content_type'],source='content_type_audio_regex',isopendir=False, visited=True,parent_host=args['parent_host'],db=args['db'])
+    db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_audio_regex',isopendir=False, visited=True,parent_host=args['parent_host'],db=args['db'])
     return True
 
 @function_for_content_type(content_type_pdf)
 def content_type_pdfs(args):
-    db_update_url(url=args['url'], content_type=args['content_type'],isopendir=False, visited=True,source='content_type_pdf',parent_host=args['parent_host'],db=args['db'])
+    db_insert_if_new_url(url=args['url'], content_type=args['content_type'],isopendir=False, visited=True,source='content_type_pdf',parent_host=args['parent_host'],db=args['db'])
     if not DOWNLOAD_PDFS:
         return True
     filename=os.path.basename(urlparse(args['url']).path)
@@ -682,7 +584,7 @@ def initialize_driver():
     options = webdriver.ChromeOptions()
     options.add_argument(f'user-agent={user_agent}')
     prefs = {"download.default_directory": DIRECT_LINK_DOWNLOAD_FOLDER,}
-    if not CATEGORIZE_NSFW and not SAVE_ALL_IMAGES:
+    if not CATEGORIZE_NSFW and not SAVE_ALL_IMAGES and not FORCE_IMAGE_LOAD:
         prefs["profile.managed_default_content_settings.images"] = 2  # disable images
     if BLOCK_CSS:
         prefs["profile.managed_default_content_settings.stylesheets"] = 2  # disable CSS

@@ -44,7 +44,7 @@ URLS_INDEX='urls'
 EMAILS_INDEX='emails'
 BLOCK_CSS=False
 PERFORMANCE_OPTIMIZED=False
-
+FORCE_IMAGE_LOAD=True
 
 #be_greedy = True - Save urls to database that might not work, since have not matched any regex.
 BE_GREEDY=False

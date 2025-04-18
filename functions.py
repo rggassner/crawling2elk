@@ -115,7 +115,7 @@ def db_create_database(initial_url, db):
                 "visited": {"type": "boolean"},
                 "isopendir": {"type": "boolean"},
                 "isnsfw": {"type": "float"},
-                "content_type": {"type": "text"},
+                "content_type": {"type": "keyword"},
                 "source": {"type": "keyword"},
                 "words": {"type": "keyword"},
                 "host": {"type": "keyword"},
@@ -657,4 +657,3 @@ content_type_all_others_regex = [
         r"^video/x-msvideo$",
         r"^video/vnd\.dlna\.mpeg-tts$",
     ]
-

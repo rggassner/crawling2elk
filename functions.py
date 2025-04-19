@@ -4,6 +4,7 @@ from urllib.parse import urlsplit
 from datetime import datetime, timezone
 from elasticsearch import NotFoundError, RequestError
 from elasticsearch import Elasticsearch
+from elasticsearch.exceptions import NotFoundError, RequestError
 
 def sanitize_url(url):
     url = url.strip()
@@ -69,6 +70,15 @@ def sanitize_url(url):
     url = re.sub("^httpqs://", "https://www.", url)
     return url
 
+def get_host_levels(hostname):
+    parts = hostname.split('.')
+    levels = [] 
+    for i in range(1, len(parts) + 1):
+        level = '.'.join(parts[-i:])
+        levels.append(level)
+    return levels
+
+
 class DatabaseConnection:
     def __init__(self):
         es_config = {
@@ -120,6 +130,8 @@ def db_create_database(initial_url, db):
                 "words": {"type": "keyword"},
                 "host": {"type": "keyword"},
                 "parent_host": {"type": "keyword"},
+                "host_levels": {"type": "keyword"},
+                "emails": {"type": "keyword"},
                 "resolution": {"type": "integer"},
                 "random_bucket": {"type": "integer"},
                 "created_at": {"type": "date"},
@@ -128,23 +140,10 @@ def db_create_database(initial_url, db):
         }
     }
 
-    # Define mappings for the EMAILS_INDEX
-    emails_mapping = {
-        "mappings": {
-            "properties": {
-                "url": {"type": "keyword"},
-                "email": {"type": "keyword"}
-            }
-        }
-    }
-
     try:
         if not db.con.indices.exists(index=URLS_INDEX):
             db.con.indices.create(index=URLS_INDEX, body=urls_mapping)
             print("Created {} index.".format(URLS_INDEX))
-        if not db.con.indices.exists(index=EMAILS_INDEX):
-            db.con.indices.create(index=EMAILS_INDEX, body=emails_mapping)
-            print("Created {} index.".format(EMAILS_INDEX))
 
         # Insert the initial URL as a document
         doc = {
@@ -153,6 +152,7 @@ def db_create_database(initial_url, db):
             "isopendir": False,
             "isnsfw": 0.0,
             "source": "manual",
+            "host_level": get_host_levels(host),
             "host": host,
             "parent_host": None,
             "resolution": None,
@@ -171,12 +171,28 @@ def db_create_database(initial_url, db):
         print("Error creating indices or inserting initial document:", e)
         return False
 
-def get_random_unvisited_domains(db):
+
+
+def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
+    """Randomly selects between different spreading strategies."""
+    choice = random.random()
+    if choice < 0.0001:
+        print('fewest urls')
+        return get_urls_from_hosts_with_fewest_urls(db, size=size)
+    elif choice < 0.5:
+        print('less visited')
+        return get_urls_from_least_visited_hosts(db, size=size)
+    else:
+        print('random')
+        return get_random_host_domains(db, size=size)
+
+def get_random_host_domains(db, size=100):
+    """Original logic: get unvisited URLs from random hosts."""
     try:
         for attempt in range(MAX_ES_RETRIES):
             random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
             query_body = {
-                "size": ELASTICSEARCH_RANDOM_BUCKETS,
+                "size": size,
                 "query": {
                     "bool": {
                         "must": [
@@ -210,33 +226,156 @@ def get_random_unvisited_domains(db):
                 }
             }
 
-            try:
-                response = db.con.search(index=URLS_INDEX, body=query_body)
-                results = response.get('hits', {}).get('hits', [])
+            response = db.con.search(index=URLS_INDEX, body=query_body)
+            results = response.get('hits', {}).get('hits', [])
 
-                if results:
-                    return [{
-                        "url": r["inner_hits"]["random_hit"]["hits"]["hits"][0]["_source"]["url"],
-                        "host": r["_source"]["host"]
-                    } for r in results]
-
-            except NotFoundError as e:
-                if "index_not_found_exception" in str(e):
-                    print("Elasticsearch index missing. Creating now...")
-                    db_create_database(INITIAL_URL, db=db)
-                else:
-                    print(f"[Attempt {attempt+1}] Elasticsearch query failed:", e)
-            except RequestError as e:
-                print(f"[Attempt {attempt+1}] Elasticsearch request error:", e)
-            except Exception as e:
-                print(f"[Attempt {attempt+1}] Elasticsearch unknown error:", e)
+            if results:
+                return [{
+                    "url": r["inner_hits"]["random_hit"]["hits"]["hits"][0]["_source"]["url"],
+                    "host": r["_source"]["host"]
+                } for r in results]
 
             time.sleep(ES_RETRY_DELAY)
 
-        print("No unvisited domains found after retries.")
-        return []
+    except NotFoundError as e:
+        if "index_not_found_exception" in str(e):
+            print("Elasticsearch index missing. Creating now...")
+            db_create_database(INITIAL_URL, db=db)
+    except RequestError as e:
+        print("Elasticsearch request error:", e)
     except Exception as e:
-        print("Unhandled error:", e)
+        print("Unhandled error in get_random_host_domains:", e)
+
+    return []
+
+def get_urls_from_least_visited_hosts(db, size=100):
+    """Fetch 1 unvisited URL per host from the least visited hosts."""
+    try:
+        query_body = {
+            "size": size,
+            "query": {
+                "bool": {
+                    "should": [
+                        {"term": {"visited": False}},
+                        {"bool": {"must_not": {"exists": {"field": "visited"}}}}
+                    ],
+                    "minimum_should_match": 1
+                }
+            },
+            "collapse": {
+                "field": "host",
+                "inner_hits": {
+                    "name": "least_visited_hit",
+                    "size": 1,
+                    "sort": [
+                        {
+                            "_script": {
+                                "type": "number",
+                                "script": {
+                                    "lang": "painless",
+                                    "source": "Math.random()"
+                                },
+                                "order": "asc"
+                            }
+                        }
+                    ]
+                }
+            },
+            "_source": ["host"]
+        }
+
+        response = db.con.search(index=URLS_INDEX, body=query_body)
+        results = response.get('hits', {}).get('hits', [])
+
+        if results:
+            return [{
+                "url": r["inner_hits"]["least_visited_hit"]["hits"]["hits"][0]["_source"]["url"],
+                "host": r["_source"]["host"]
+            } for r in results]
+
+    except Exception as e:
+        print("Unhandled error in get_urls_from_least_visited_hosts:", e)
+
+    return []
+
+def get_urls_from_hosts_with_fewest_urls(db, size=100):
+    """Fetch 1 unvisited URL per host from the hosts that have the fewest URLs stored."""
+    try:
+        # Step 1: Aggregate hosts by URL count, ascending (least stored hosts first)
+        aggs_body = {
+            "size": 0,
+            "aggs": {
+                "least_used_hosts": {
+                    "terms": {
+                        "field": "host",
+                        "size": size,
+                        "order": {
+                            "_count": "asc"
+                        }
+                    }
+                }
+            }
+        }
+
+        aggs_response = db.con.search(index=URLS_INDEX, body=aggs_body)
+        buckets = aggs_response.get("aggregations", {}).get("least_used_hosts", {}).get("buckets", [])
+        least_used_hosts = [bucket["key"] for bucket in buckets]
+
+        if not least_used_hosts:
+            return []
+
+        # Step 2: Now fetch 1 unvisited URL per host
+        query_body = {
+            "size": size * 2,  # overfetch to avoid hosts without unvisited URLs
+            "query": {
+                "bool": {
+                    "must": [
+                        {"terms": {"host": least_used_hosts}},
+                        {
+                            "bool": {
+                                "should": [
+                                    {"term": {"visited": False}},
+                                    {"bool": {"must_not": {"exists": {"field": "visited"}}}}
+                                ],
+                                "minimum_should_match": 1
+                            }
+                        }
+                    ]
+                }
+            },
+            "collapse": {
+                "field": "host",
+                "inner_hits": {
+                    "name": "one_unvisited",
+                    "size": 1,
+                    "sort": [
+                        {
+                            "_script": {
+                                "type": "number",
+                                "script": {
+                                    "lang": "painless",
+                                    "source": "Math.random()"
+                                },
+                                "order": "asc"
+                            }
+                        }
+                    ]
+                }
+            },
+            "_source": ["host"]
+        }
+
+        response = db.con.search(index=URLS_INDEX, body=query_body)
+        results = response.get("hits", {}).get("hits", [])
+
+        return [{
+            "url": r["inner_hits"]["one_unvisited"]["hits"]["hits"][0]["_source"]["url"],
+            "host": r["_source"]["host"]
+        } for r in results]
+
+    except Exception as e:
+        print("Unhandled error in get_urls_from_hosts_with_fewest_urls:", e)
+
     return []
 
 content_type_html_regex=[

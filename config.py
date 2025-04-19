@@ -41,10 +41,10 @@ WORDS_MIN_LEN=3
 WORDS_MAX_LEN=40
 WORDS_MAX_WORDS=5000
 URLS_INDEX='urls'
-EMAILS_INDEX='emails'
 BLOCK_CSS=False
 PERFORMANCE_OPTIMIZED=False
 FORCE_IMAGE_LOAD=True
+RANDOM_SITES_QUEUE=5
 
 #be_greedy = True - Save urls to database that might not work, since have not matched any regex.
 BE_GREEDY=False
@@ -53,21 +53,6 @@ BE_GREEDY=False
 host_regex_block_list = [
     r'localhost:4443$',
     r'(^|\.)instagram\.com$',
-    r'(^|\.)gstatic\.com$',
-    r'(^|\.)google\.com$',
-    r'(^|\.)youtube\.com$',
-    r'(^|\.)google$',
-    r'(^|\.)google\.com$',
-    r'(^|\.)android\.com$',
-    r'(^|\.)googleapis\.com$',
-    r'(^|\.)twitter\.com$',
-    r'(^|\.)goo\.gle$',
-    r'(^|\.)wikipedia\.org$',
-    r'(^|\.)facebook\.com$',
-    r'(^|\.)googleadservices\.com$',
-    r'(^|\.)linkedin\.com$',
-    r'(^|\.)doubleclick\.net$',
-    r'(^|\.)googlesyndication\.com$',
 ]
 
 #do not crawl urls that match any of these regexes

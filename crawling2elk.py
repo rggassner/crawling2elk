@@ -1,8 +1,8 @@
-#!venv/bin/python3                                                                                                   
-import os, re, time, hashlib, signal, random, argparse, urllib3, warnings, bs4.builder                               
-import numpy as np                                                                                                   
-from config import *                                                                                                 
-if CATEGORIZE_NSFW:                                                                                                  
+#!venv/bin/python3
+import os, re, time, hashlib, signal, random, argparse, urllib3, warnings, bs4.builder
+import numpy as np
+from config import *
+if CATEGORIZE_NSFW:
     import opennsfw2 as n2
     model = n2.make_open_nsfw_model()
 from functions import *
@@ -65,11 +65,6 @@ def is_host_allow_listed(url):
             return True
     return False
 
-def remove_jsessionid_with_semicolon(url):
-    pattern = r';jsessionid=[^&?]*'
-    cleaned_url = re.sub(pattern, '', url)
-    return cleaned_url
-
 def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
     script_lines = []
     params = {}
@@ -95,141 +90,6 @@ def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
     """)
 
     return "\n".join(script_lines), params
-
-def db_insert_if_new_url(url='', isopendir='', visited='', source='', content_type='', words='',
-                         isnsfw='', resolution='', parent_host='', email=None, db=None, debug=False):
-    
-    try:
-        host = urlsplit(url)[1]
-        host_levels = get_host_levels(host)
-
-    except ValueError:
-        return False
-
-    url = remove_jsessionid_with_semicolon(url)
-    now_iso = datetime.now(timezone.utc).isoformat()
-    doc_id = hash_url(url)
-
-    try:
-        # Check for existing doc if debugging
-        existing_doc = None
-        if debug:
-            try:
-                existing_doc = db.con.get(index=URLS_INDEX, id=doc_id)["_source"]
-            except Exception:
-                pass
-
-        # Insert-only fields
-        insert_only_fields = {
-            "url": url,
-            "host": host
-        }
-
-        if email:
-            if "emails" not in insert_only_fields:
-                insert_only_fields["emails"] = []
-            insert_only_fields["emails"].append(email)
-
-
-        if existing_doc is None:
-            insert_only_fields["random_bucket"] = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
-            insert_only_fields["host_levels"] = host_levels
-            if source:
-                insert_only_fields["source"] = source
-            if parent_host:
-                insert_only_fields["parent_host"] = parent_host
-
-        # Fields that may be updated
-        doc = {}
-        if content_type: doc["content_type"] = content_type
-        if words: doc["words"] = words
-        if isopendir is not None:
-            doc["isopendir"] = isopendir
-        if isnsfw: doc["isnsfw"] = float(isnsfw)
-        if resolution:
-            doc["resolution"] = int(resolution) if str(resolution).isdigit() else 0
-        if visited != '':
-            doc["visited"] = visited
-        elif "visited" not in insert_only_fields:
-            insert_only_fields["visited"] = False  # Default for new documents
-
-        # Debug: show diff
-        if debug:
-            if existing_doc:
-                for key, new_value in {**insert_only_fields, **doc}.items():
-                    if key in ("random_bucket", "source", "parent_host"):
-                        continue
-                    old_value = existing_doc.get(key, None)
-                    if key != "visited" and old_value != new_value:
-                        print(f"[DEBUG] INSERT - Comparing update for URL: {url}")
-                        print(f"  🔄 {key}: '{old_value}' ➡ '{new_value}'")
-            else:
-                print(f"[DEBUG] INSERT - Comparing update for URL: {url}")
-                print("  📌 New document")
-
-        # Build the update script
-        script_lines = ["boolean has_updated = false;"]
-
-        if email:
-            script_lines.append("""
-                if (!ctx._source.containsKey('emails')) {
-                    ctx._source.emails = [params.email];
-                    has_updated = true;
-                } else if (!ctx._source.emails.contains(params.email)) {
-                    ctx._source.emails.add(params.email);
-                    has_updated = true;
-                }
-            """)
-            doc["email"] = email
-
-        for key in doc:
-            if key == "visited":
-                script_lines.append("""
-                    if (!ctx._source.containsKey('visited') || ctx._source.visited == false) {
-                        ctx._source.visited = params.visited;
-                        has_updated = true;
-                    }
-                """)
-            else:
-                script_lines.append(f"""
-                    if (params.containsKey('{key}')) {{
-                        def old_val = ctx._source.containsKey('{key}') ? ctx._source['{key}'] : null;
-                        if (old_val != params['{key}']) {{
-                            ctx._source['{key}'] = params['{key}'];
-                            has_updated = true;
-                        }}
-                    }}
-                """)
-
-        # Only update timestamp if something changed
-        script_lines.append("if (has_updated) { ctx._source.updated_at = params.updated_at; }")
-        script = "\n".join(script_lines)
-
-        # Combine all fields into upsert
-        upsert_doc = {**insert_only_fields, **doc}
-        upsert_doc["created_at"] = now_iso
-        upsert_doc["updated_at"] = now_iso
-        doc["updated_at"] = now_iso
-
-        # Perform upsert safely
-        db.con.update(
-            index=URLS_INDEX,
-            id=doc_id,
-            body={
-                "scripted_upsert": True,
-                "script": {
-                    "source": script,
-                    "lang": "painless",
-                    "params": doc
-                },
-                "upsert": upsert_doc
-            }
-        )
-        return True
-
-    except Exception as e:
-        print(f"[Elasticsearch] Error inserting URL '{url}':", e)
-        return False
 
 def get_words(text: bytes | str) -> list[str]:
     if not text:
@@ -516,6 +376,7 @@ def sanitize_content_type(content_type):
 def get_page(url,driver,db):
     driver = read_web(url,driver)
     parent_host=urlsplit(url)[1]
+    #main_url=url
     if driver:
         for request in driver.requests:
             if request.response and request.response.headers['Content-Type']:
@@ -536,6 +397,7 @@ def get_page(url,driver,db):
                             continue
                     if not found:
                         print("UNKNOWN type -{}- -{}-".format(url, content_type))
+    #db_insert_if_new_url(url=main_url,visited=True, source='get_page', db=db)
 
 def break_after(seconds=60):
     def timeout_handler(signum, frame):  # Custom signal handler
@@ -629,7 +491,6 @@ def crawler(db):
                     pass
         driver.quit()
 
-
 def main():
     global model
     parser = argparse.ArgumentParser(description="URL scanner and inserter.")
@@ -659,4 +520,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+

@@ -13,7 +13,8 @@ DOWNLOAD_AUDIOS=True
 AUDIOS_FOLDER='audios'
 DOWNLOAD_PDFS=True
 PDFS_FOLDER='pdfs'
-INITIAL_URL='https://www.uol.com.br'
+#Always use the slash when dealing with domain
+INITIAL_URL='https://www.uol.com.br/'
 ITERATIONS=2
 NSFW_MIN_PROBABILITY=.78
 CATEGORIZE_NSFW=True

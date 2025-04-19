@@ -72,24 +72,6 @@ def db_get_visit_count(db):
         print("[Elasticsearch] Error counting visited URLs:", e)
         return 0
 
-def db_get_email_count(db):
-    try:
-        query = {
-            "size": 0,
-            "aggs": {
-                "unique_emails": {
-                    "cardinality": {
-                        "field": "email"
-                    }
-                }
-            }
-        }
-        res = db.search(index=EMAILS_INDEX, body=query)
-        return res["aggregations"]["unique_emails"]["value"]
-    except Exception as e:
-        print("[Elasticsearch] Error counting unique emails:", e)
-        return 0
-
 def db_get_content_type_count(db):
     try:
         query = {
@@ -316,6 +298,7 @@ def db_get_all_relations(con):
 def update_data():
     db = DatabaseConnection()
     ensure_database_created=get_random_unvisited_domains(db)
+    print(ensure_database_created)
     network={}
     network['nodes']=[]
     network['links']=[]
@@ -422,9 +405,8 @@ def update_data():
     f.write('''
     <br>Total urls/visited: {}/{}<br>
     <br>Domain count: {}<br>
-    Total emails: {}<br>
     Top Urls:<br>
-    <table>'''.format(db_count_urls(db),db_get_visit_count(db),db_get_unique_domain_count(db),db_get_email_count(db)))
+    <table>'''.format(db_count_urls(db),db_get_visit_count(db),db_get_unique_domain_count(db)))
     for line in db_get_top_domain(db):
         f.write('<tr><td>{}</td><td>{}</td></tr>'.format(line[0],line[1]))
     f.write('</table><br>Top Content-Type:<br><table>')
@@ -469,7 +451,7 @@ def make_app():
 
 def main():
     app = make_app()
-    periodic_callback = ioloop.PeriodicCallback(periodic_task, 5000)
+    periodic_callback = ioloop.PeriodicCallback(periodic_task, 50000)
     periodic_callback.start()
     server = httpserver.HTTPServer(app, ssl_options={
         "certfile": "cert.pem",  
@@ -480,3 +462,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

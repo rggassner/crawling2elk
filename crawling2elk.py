@@ -1,8 +1,8 @@
-#!venv/bin/python3
-import os, re, time, hashlib, signal, random, argparse, urllib3, warnings, bs4.builder
-import numpy as np
-from config import *
-if CATEGORIZE_NSFW:
+#!venv/bin/python3                                                                                                   
+import os, re, time, hashlib, signal, random, argparse, urllib3, warnings, bs4.builder                               
+import numpy as np                                                                                                   
+from config import *                                                                                                 
+if CATEGORIZE_NSFW:                                                                                                  
     import opennsfw2 as n2
     model = n2.make_open_nsfw_model()
 from functions import *
@@ -97,9 +97,12 @@ def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
     return "\n".join(script_lines), params
 
 def db_insert_if_new_url(url='', isopendir='', visited='', source='', content_type='', words='',
-                         isnsfw='', resolution='', parent_host='', db=None, debug=False):
+                         isnsfw='', resolution='', parent_host='', email=None, db=None, debug=False):
+    
     try:
         host = urlsplit(url)[1]
+        host_levels = get_host_levels(host)
+
     except ValueError:
         return False
 
@@ -122,8 +125,15 @@ def db_insert_if_new_url(url='', isopendir='', visited='', source='', content_ty
             "host": host
         }
 
+        if email:
+            if "emails" not in insert_only_fields:
+                insert_only_fields["emails"] = []
+            insert_only_fields["emails"].append(email)
+
+
         if existing_doc is None:
             insert_only_fields["random_bucket"] = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
+            insert_only_fields["host_levels"] = host_levels
             if source:
                 insert_only_fields["source"] = source
             if parent_host:
@@ -133,7 +143,8 @@ def db_insert_if_new_url(url='', isopendir='', visited='', source='', content_ty
         doc = {}
         if content_type: doc["content_type"] = content_type
         if words: doc["words"] = words
-        if isopendir: doc["isopendir"] = isopendir
+        if isopendir is not None:
+            doc["isopendir"] = isopendir
         if isnsfw: doc["isnsfw"] = float(isnsfw)
         if resolution:
             doc["resolution"] = int(resolution) if str(resolution).isdigit() else 0
@@ -151,13 +162,25 @@ def db_insert_if_new_url(url='', isopendir='', visited='', source='', content_ty
                     old_value = existing_doc.get(key, None)
                     if key != "visited" and old_value != new_value:
                         print(f"[DEBUG] INSERT - Comparing update for URL: {url}")
-                        print(f"  🔄 {key}: '{old_value}' ➡️ '{new_value}'")
+                        print(f"  🔄 {key}: '{old_value}' ➡ '{new_value}'")
             else:
                 print(f"[DEBUG] INSERT - Comparing update for URL: {url}")
                 print("  📌 New document")
 
         # Build the update script
         script_lines = ["boolean has_updated = false;"]
+
+        if email:
+            script_lines.append("""
+                if (!ctx._source.containsKey('emails')) {
+                    ctx._source.emails = [params.email];
+                    has_updated = true;
+                } else if (!ctx._source.emails.contains(params.email)) {
+                    ctx._source.emails.add(params.email);
+                    has_updated = true;
+                }
+            """)
+            doc["email"] = email
 
         for key in doc:
             if key == "visited":
@@ -206,33 +229,6 @@ def db_insert_if_new_url(url='', isopendir='', visited='', source='', content_ty
 
     except Exception as e:
         print(f"[Elasticsearch] Error inserting URL '{url}':", e)
-        return False
-
-
-def db_insert_email(url='', email='', db=None):
-    if not db or not db.con:
-        print("Elasticsearch connection not available.")
-        return False
-    try:
-        # Create a unique ID based on URL and email to prevent duplicates
-        doc_id = f"{url}|{email}"
-        # Define the document structure
-        doc = {
-            "url": url,
-            "email": email
-        }
-        # Perform the upsert (insert if not exists, update otherwise)
-        db.con.update(
-            index=EMAILS_INDEX,
-            id=doc_id,
-            body={
-                "doc": doc,
-                "doc_as_upsert": True
-            }
-        )
-        return True
-    except Exception as e:
-        print("[Elasticsearch] Error inserting email:", e)
         return False
 
 def get_words(text: bytes | str) -> list[str]:
@@ -335,13 +331,13 @@ def email_url(args):
             r"^([A-Za-z0-9]+[.-_])*[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{2,})+$",
             address,
         ):
-            db_insert_email(url=args['parent_url'], email=address,db=args['db'])
+            parent_host=urlsplit(args['parent_url'])[1]
+            db_insert_if_new_url(url=args['parent_url'],email=address,source='email_url',parent_host=parent_host,db=args['db'])
             return True
         else:
             return False
     else:
         return False
-
 
 def get_links(soup, content_url,db):
     #If you want to grep some patterns, use the code below.
@@ -663,3 +659,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    

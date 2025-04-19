@@ -1,57 +1,49 @@
-#!venv/bin/python3
-from config import *
-from functions import *
-import concurrent.futures
-from elasticsearch import Elasticsearch
-import json, os, time, ssl, urllib3, warnings
-from tornado import concurrent, gen, httpserver, ioloop, log, web, iostream
-from elasticsearch import NotFoundError, RequestError
-os.system("openssl req -nodes -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -subj '/CN=mylocalhost'")
-from urllib3.exceptions import InsecureRequestWarning
-warnings.filterwarnings("ignore", category=InsecureRequestWarning)
-warnings.filterwarnings("ignore", category=Warning, message=".*verify_certs=False is insecure.*")
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-def execute_query(con, query, fetch_one=False, fetch_all=False):
-    """Executes a query and returns results if required."""
-    cur = con.cursor()  # Create cursor without "with"
-    
-    cur.execute(query)
-    
-    if fetch_one:
-        result = cur.fetchone()
-    elif fetch_all:
-        result = cur.fetchall()
-    else:
-        result = None
-
-    con.commit()  # Commit changes if needed
-    cur.close()   # Manually close the cursor (important for SQLite)
-
-    return result
-
-def db_count_urls(db):
-    try:
-        res = db.search(index=URLS_INDEX, body={"track_total_hits": True, "query": {"match_all": {}}})
-        return res["hits"]["total"]["value"]
-    except Exception as e:
-        print("[Elasticsearch] Error counting URLs:", e)
-        return 0
-
-def db_get_unique_domain_count(db):
-    try:
-        query = {
-            "size": 0,
-            "aggs": {
-                "unique_hosts": {
-                    "cardinality": {
-                        "field": "host"
-                    }
-                }
-            }
-        }
-        res = db.search(index=URLS_INDEX, body=query)
-        return res["aggregations"]["unique_hosts"]["value"]
+#!venv/bin/python3                                                                                                   
+from config import *                                                                                                 
+from functions import *                                                                                              
+import concurrent.futures                                                                                            
+from elasticsearch import Elasticsearch                                                                              
+import json, os, time, ssl, urllib3, warnings                                                                        
+from tornado import concurrent, gen, httpserver, ioloop, log, web, iostream                                          
+from elasticsearch import NotFoundError, RequestError                                                                
+os.system("openssl req -nodes -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -subj '/CN=mylocalhost'")                                                                                                                    
+from urllib3.exceptions import InsecureRequestWarning                                                                
+warnings.filterwarnings("ignore", category=InsecureRequestWarning)                                                   
+warnings.filterwarnings("ignore", category=Warning, message=".*verify_certs=False is insecure.*")                    
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)                                                  
+                                                                                                                     
+def execute_query(con, query, fetch_one=False, fetch_all=False):                                                     
+    """Executes a query and returns results if required."""                                                          
+    cur = con.cursor()  # Create cursor without "with"                                                               
+                                                                                                                     
+    cur.execute(query)                                                                                               
+                                                                                                                     
+    if fetch_one:                                                                                                    
+        result = cur.fetchone()                                                                                      
+    elif fetch_all:                                                                                                  
+        result = cur.fetchall()                                                                                      
+    else:                                                                                                            
+        result = None                                                                                                
+                                                                                                                     
+    con.commit()  # Commit changes if needed                                                                         
+    cur.close()   # Manually close the cursor (important for SQLite)                                                 
+                                                                                                                     
+    return result                                                                                                    
+                                                                                                                     
+def db_get_unique_domain_count(db):                                                                                  
+    try:                                                                                                             
+        query = {                                                                                                    
+            "size": 0,                                                                                               
+            "aggs": {                                                                                                
+                "unique_hosts": {                                                                                    
+                    "cardinality": {                                                                                 
+                        "field": "host"                                                                              
+                    }                                                                                                
+                }                                                                                                    
+            }                                                                                                        
+        }                                                                                                            
+        res = db.search(index=URLS_INDEX, body=query)                                                                
+        return res["aggregations"]["unique_hosts"]["value"]                                                          
     except Exception as e:
         print("[Elasticsearch] Error counting unique domains:", e)
         return 0
@@ -115,102 +107,6 @@ def db_get_top_domain(db):
     except Exception as e:
         print("[Elasticsearch] Error getting top domains:", e)
         return []
-
-
-def db_get_porn_domains(db):
-    try:
-        query = {
-            "size": 0,  # We don’t need actual docs, just the aggregation
-            "query": {
-                "bool": {
-                    "must": [
-                        {"range": {"resolution": {"gte": 224 * 224}}},
-                        {"exists": {"field": "isnsfw"}}
-                    ]
-                }
-            },
-            "aggs": {
-                "group_by_parent": {
-                    "terms": {
-                        "field": "parent_host",
-                        "size": 10000,  # Adjust if needed
-                        "min_doc_count": 5  # At least 5 docs to meet c > 4
-                    },
-                    "aggs": {
-                        "avg_isnsfw": {"avg": {"field": "isnsfw"}},
-                        "bucket_filter": {
-                            "bucket_selector": {
-                                "buckets_path": {
-                                    "avgNSFW": "avg_isnsfw",
-                                    "count": "_count"
-                                },
-                                "script": "params.avgNSFW > 0.3"
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        res = db.search(index=URLS_INDEX, body=query)
-        results = []
-
-        for bucket in res["aggregations"]["group_by_parent"]["buckets"]:
-            parent_host = bucket["key"]
-            avg_isnsfw = bucket["avg_isnsfw"]["value"]
-            count = bucket["doc_count"]
-            results.append((avg_isnsfw, parent_host, count))
-
-        # Sort by average NSFW score (ascending)
-        results.sort(key=lambda x: x[0])
-        return results
-
-    except Exception as e:
-        print("[Elasticsearch] Error getting porn domains:", e)
-        return []
-
-
-def db_get_porn_urls(db):
-    try:
-        query = {
-            "query": {
-                "bool": {
-                    "must": [
-                        {"range": {"resolution": {"gte": 224 * 224}}},
-                        {"exists": {"field": "isnsfw"}}
-                    ]
-                }
-            },
-            "sort": [{"isnsfw": {"order": "desc"}}],
-            "size": 10,
-            "_source": ["isnsfw", "url"]
-        }
-
-        res = db.search(index=URLS_INDEX, body=query)
-        return [(hit["_source"]["isnsfw"], hit["_source"]["url"]) for hit in res["hits"]["hits"]]
-
-    except Exception as e:
-        print("[Elasticsearch] Error getting porn URLs:", e)
-        return []
-
-
-def db_get_open_dir(db):
-    try:
-        query = {
-            "query": {
-                "term": {
-                    "isopendir": True  # Assuming `isopendir` is stored as a boolean
-                }
-            },
-            "_source": ["url"],
-            "size": 10000  # Adjust as needed or implement scroll for large datasets
-        }
-        res = db.search(index=URLS_INDEX, body=query)
-        return [hit["_source"]["url"] for hit in res["hits"]["hits"] if "url" in hit["_source"]]
-    except Exception as e:
-        print("[Elasticsearch] Error getting open directories:", e)
-        return []
-
 
 def db_get_all_hosts(db):
     query = {
@@ -403,29 +299,16 @@ def update_data():
   </script>
     ''')
     f.write('''
-    <br>Total urls/visited: {}/{}<br>
+    <br>Total urls/visited: {}<br>
     <br>Domain count: {}<br>
     Top Urls:<br>
-    <table>'''.format(db_count_urls(db),db_get_visit_count(db),db_get_unique_domain_count(db)))
+    <table>'''.format(db_get_visit_count(db),db_get_unique_domain_count(db)))
     for line in db_get_top_domain(db):
         f.write('<tr><td>{}</td><td>{}</td></tr>'.format(line[0],line[1]))
     f.write('</table><br>Top Content-Type:<br><table>')
     for line in db_get_content_type_count(db):
         f.write('<tr><td>{}</td><td>{}</td></tr>'.format(line[0],line[1]))
-    f.write('</table><br>Open directories:<br><table>')
-    for line in db_get_open_dir(db):
-        f.write('<tr><td>{}</td></tr>'.format(line[0]))
-    f.write('</table><br>Top porn domains:<br><table>')
-    for line in db_get_porn_domains(db):
-        f.write('<tr><td>{}</td><td>{}</td><td>{}</td></tr>'.format(line[0],line[1],line[2]))
-    f.write('</table><br>Top porn urls:<br><table>')
-    for line in db_get_porn_urls(db):
-        f.write('<tr><td>{}</td><td><a href={}>{}</a></td></tr>'.format(line[0],line[1],line[1]))
-    f.write('''\
-    </table>
-    </body>
-    </html>
-    '''.format(db_count_urls(db)))
+    f.write(''' </table> </body> </html> ''')
     f.close()
 
 class MainHandler(web.RequestHandler):
@@ -462,4 +345,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

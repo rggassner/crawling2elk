@@ -373,31 +373,45 @@ def sanitize_content_type(content_type):
     content_type = re.sub(r'\s+', '', content_type)  # remove any remaining spaces
     return content_type
 
-def get_page(url,driver,db):
-    driver = read_web(url,driver)
-    parent_host=urlsplit(url)[1]
-    #main_url=url
+def get_page(url, driver, db):
+    driver = read_web(url, driver)  # Fetch the page using Selenium
+    parent_host = urlsplit(url)[1]  # Get the parent host from the URL
     if driver:
         for request in driver.requests:
-            if request.response and request.response.headers['Content-Type']:
-                url=request.url
-                host=urlsplit(url)[1]
-                content=decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
-                content_type=request.response.headers['Content-Type']
-                content_type=sanitize_content_type(content_type)
-                if not is_host_block_listed(host) and is_host_allow_listed(host) and not is_url_block_listed(url):
-                    if HUNT_OPEN_DIRECTORIES:
-                        insert_directory_tree(url,db)
-                    found=False
-                    for regex, function in content_type_functions:
-                        m = regex.search(content_type)
-                        if m:
-                            found = True
-                            function({'url':url,'visited':True, 'content_type':content_type, 'content':content,'source':'get_page','words':'','parent_host':parent_host,'db':db})
-                            continue
-                    if not found:
-                        print("UNKNOWN type -{}- -{}-".format(url, content_type))
-    #db_insert_if_new_url(url=main_url,visited=True, source='get_page', db=db)
+            if request.response:
+                # Check if the response status code indicates redirection
+                status_code = request.response.status_code
+                #print('Status code {} for url {}'.format(status_code,url))
+                if status_code in [301, 302, 303, 307, 308]:  # Redirection status codes
+                    # Get the new URL from the Location header
+                    db_insert_if_new_url(url=url,visited=True,isopendir=False,source='get_page.redirect',parent_host=parent_host,db=db)
+
+                # Continue with normal content processing 
+                if 'Content-Type' in request.response.headers:
+                    url=request.url
+                    host=urlsplit(url)[1]
+                    content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
+                    content_type = request.response.headers['Content-Type']
+                    content_type = sanitize_content_type(content_type)
+                    host = urlsplit(url)[1]  # Extract host from the URL
+
+                    if not is_host_block_listed(host) and is_host_allow_listed(host) and not is_url_block_listed(url):
+                        if HUNT_OPEN_DIRECTORIES:
+                            insert_directory_tree(url, db)
+
+                        found = False
+                        for regex, function in content_type_functions:
+                            m = regex.search(content_type)
+                            if m:
+                                found = True
+                                function({'url': url, 'visited': True, 'content_type': content_type, 
+                                          'content': content, 'source': 'get_page', 'words': '', 
+                                          'parent_host': parent_host, 'db': db})
+                                continue
+                        if not found:
+                            print(f"UNKNOWN type -{url}- -{content_type}-")
+        #force update on main url
+        db_insert_if_new_url(url=url,visited=True,source='get_page.end',parent_host=parent_host,db=db)
 
 def break_after(seconds=60):
     def timeout_handler(signum, frame):  # Custom signal handler

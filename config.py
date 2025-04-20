@@ -45,7 +45,9 @@ URLS_INDEX='urls'
 BLOCK_CSS=False
 PERFORMANCE_OPTIMIZED=False
 FORCE_IMAGE_LOAD=True
-RANDOM_SITES_QUEUE=5
+RANDOM_SITES_QUEUE=100
+MAX_DIR_LEVELS=7
+MAX_HOST_LEVELS=7
 
 #be_greedy = True - Save urls to database that might not work, since have not matched any regex.
 BE_GREEDY=False

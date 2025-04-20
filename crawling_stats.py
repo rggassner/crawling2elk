@@ -1,112 +1,35 @@
-#!venv/bin/python3                                                                                                   
-from config import *                                                                                                 
-from functions import *                                                                                              
-import concurrent.futures                                                                                            
-from elasticsearch import Elasticsearch                                                                              
-import json, os, time, ssl, urllib3, warnings                                                                        
-from tornado import concurrent, gen, httpserver, ioloop, log, web, iostream                                          
-from elasticsearch import NotFoundError, RequestError                                                                
-os.system("openssl req -nodes -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -subj '/CN=mylocalhost'")                                                                                                                    
-from urllib3.exceptions import InsecureRequestWarning                                                                
-warnings.filterwarnings("ignore", category=InsecureRequestWarning)                                                   
-warnings.filterwarnings("ignore", category=Warning, message=".*verify_certs=False is insecure.*")                    
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)                                                  
-                                                                                                                     
-def execute_query(con, query, fetch_one=False, fetch_all=False):                                                     
-    """Executes a query and returns results if required."""                                                          
-    cur = con.cursor()  # Create cursor without "with"                                                               
-                                                                                                                     
-    cur.execute(query)                                                                                               
-                                                                                                                     
-    if fetch_one:                                                                                                    
-        result = cur.fetchone()                                                                                      
-    elif fetch_all:                                                                                                  
-        result = cur.fetchall()                                                                                      
-    else:                                                                                                            
-        result = None                                                                                                
-                                                                                                                     
-    con.commit()  # Commit changes if needed                                                                         
-    cur.close()   # Manually close the cursor (important for SQLite)                                                 
-                                                                                                                     
-    return result                                                                                                    
-                                                                                                                     
-def db_get_unique_domain_count(db):                                                                                  
-    try:                                                                                                             
-        query = {                                                                                                    
-            "size": 0,                                                                                               
-            "aggs": {                                                                                                
-                "unique_hosts": {                                                                                    
-                    "cardinality": {                                                                                 
-                        "field": "host"                                                                              
-                    }                                                                                                
-                }                                                                                                    
-            }                                                                                                        
-        }                                                                                                            
-        res = db.search(index=URLS_INDEX, body=query)                                                                
-        return res["aggregations"]["unique_hosts"]["value"]                                                          
-    except Exception as e:
-        print("[Elasticsearch] Error counting unique domains:", e)
-        return 0
+#!venv/bin/python3
+from config import *
+from functions import *
+import concurrent.futures
+from elasticsearch import Elasticsearch
+import json, os, time, ssl, urllib3, warnings
+from tornado import concurrent, gen, httpserver, ioloop, log, web, iostream
+from elasticsearch import NotFoundError, RequestError
+os.system("openssl req -nodes -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -subj '/CN=mylocalhost'")
+from urllib3.exceptions import InsecureRequestWarning
+warnings.filterwarnings("ignore", category=InsecureRequestWarning)
+warnings.filterwarnings("ignore", category=Warning, message=".*verify_certs=False is insecure.*")
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-def db_get_visit_count(db):
-    try:
-        query = {
-            "query": {
-                "term": {
-                    "visited": True
-                }
-            },
-            "track_total_hits": True
-        }
-        res = db.search(index=URLS_INDEX, body=query)
-        return res["hits"]["total"]["value"]
-    except Exception as e:
-        print("[Elasticsearch] Error counting visited URLs:", e)
-        return 0
+def execute_query(con, query, fetch_one=False, fetch_all=False):
+    """Executes a query and returns results if required."""
+    cur = con.cursor()  # Create cursor without "with"
+    
+    cur.execute(query)
+    
+    if fetch_one:
+        result = cur.fetchone()
+    elif fetch_all:
+        result = cur.fetchall()
+    else:
+        result = None
 
-def db_get_content_type_count(db):
-    try:
-        query = {
-            "size": 0,
-            "aggs": {
-                "top_content_types": {
-                    "terms": {
-                        "field": "content_type.keyword",  # assuming 'content_type' is a text field with a keyword subfield
-                        "size": 10,
-                        "order": {
-                            "_count": "desc"
-                        }
-                    }
-                }
-            }
-        }
-        res = db.search(index=URLS_INDEX, body=query)
-        return [(bucket["key"], bucket["doc_count"]) for bucket in res["aggregations"]["top_content_types"]["buckets"]]
-    except Exception as e:
-        print("[Elasticsearch] Error getting content type counts:", e)
-        return []
+    con.commit()  # Commit changes if needed
+    cur.close()   # Manually close the cursor (important for SQLite)
 
-def db_get_top_domain(db):
-    try:
-        query = {
-            "size": 0,
-            "aggs": {
-                "top_hosts": {
-                    "terms": {
-                        "field": "host",
-                        "size": 10,
-                        "order": {
-                            "_count": "desc"
-                        }
-                    }
-                }
-            }
-        }
-        res = db.search(index=URLS_INDEX, body=query)
-        return [(bucket["key"], bucket["doc_count"]) for bucket in res["aggregations"]["top_hosts"]["buckets"]]
-    except Exception as e:
-        print("[Elasticsearch] Error getting top domains:", e)
-        return []
+    return result
+
 
 def db_get_all_hosts(db):
     query = {
@@ -160,7 +83,7 @@ def db_get_all_relations(con):
                     ]
                 }
             },
-            "size": 10000  # max documents per batch (Elasticsearch default max)
+            "size": 100  # max documents per batch (Elasticsearch default max)
         }
 
         # Initial search
@@ -193,8 +116,6 @@ def db_get_all_relations(con):
 
 def update_data():
     db = DatabaseConnection()
-    ensure_database_created=get_random_unvisited_domains(db)
-    print(ensure_database_created)
     network={}
     network['nodes']=[]
     network['links']=[]
@@ -298,17 +219,6 @@ def update_data():
     });
   </script>
     ''')
-    f.write('''
-    <br>Total urls/visited: {}<br>
-    <br>Domain count: {}<br>
-    Top Urls:<br>
-    <table>'''.format(db_get_visit_count(db),db_get_unique_domain_count(db)))
-    for line in db_get_top_domain(db):
-        f.write('<tr><td>{}</td><td>{}</td></tr>'.format(line[0],line[1]))
-    f.write('</table><br>Top Content-Type:<br><table>')
-    for line in db_get_content_type_count(db):
-        f.write('<tr><td>{}</td><td>{}</td></tr>'.format(line[0],line[1]))
-    f.write(''' </table> </body> </html> ''')
     f.close()
 
 class MainHandler(web.RequestHandler):
@@ -334,7 +244,7 @@ def make_app():
 
 def main():
     app = make_app()
-    periodic_callback = ioloop.PeriodicCallback(periodic_task, 50000)
+    periodic_callback = ioloop.PeriodicCallback(periodic_task, 5000)
     periodic_callback.start()
     server = httpserver.HTTPServer(app, ssl_options={
         "certfile": "cert.pem",  
@@ -345,3 +255,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

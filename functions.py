@@ -1,4 +1,4 @@
-import random, hashlib, time, re
+import random, hashlib, time, re, string, json
 from config import *
 from urllib.parse import urlsplit
 from datetime import datetime, timezone
@@ -261,20 +261,30 @@ def db_insert_if_new_url(url='', isopendir=None, visited=None, source='', conten
         print(f"[Elasticsearch] ❌ Error inserting URL '{url}': {type(e).__name__} - {e}")
         return False
 
+def get_url_from_file():
+    with open(URL_FILE, 'r', encoding='utf-8') as file:
+        urls=json.load(file)
+        random.shuffle(urls)
+        return urls
 
 def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
     """Randomly selects between different spreading strategies."""
     try:
         choice = random.random()
-        if choice < 0.4:
+        if choice < 0.5:
+            return get_url_from_file()
+        elif choice < 0.6:
             print('Fewest urls')
             return get_least_covered_random_hosts(db, size=size)
-        elif choice < 0.6:
+        elif choice < 0.7:
             print('Less visited')
             return get_urls_from_least_visited_hosts(db, size=size)
         elif choice < 0.8:
             print('Oldest')
             return get_oldest_unvisited_urls_from_bucket(db, size=size)
+        elif choice < 0.9:
+            print('Host Prefix')
+            return get_urls_by_random_bucket_and_host_prefix(db, size=size)
         else:
             print('Random')
             return get_random_host_domains(db, size=size)
@@ -290,6 +300,63 @@ def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
     except Exception as e:
         print("Unhandled error in get_random_unvisited_domains:", e)
         return []
+    return []
+
+def get_urls_by_random_bucket_and_host_prefix(db, size=100):
+    """Get 1 unvisited URL per host from a random bucket where host starts with a random character."""
+    for attempt in range(MAX_ES_RETRIES):
+        random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
+        prefix_char = random.choice(string.ascii_lowercase + string.digits)
+
+        query_body = {
+            "size": size,
+            "query": {
+                "bool": {
+                    "must": [
+                        {"term": {"random_bucket": random_bucket}},
+                        {"prefix": {"host": prefix_char}},
+                        {
+                            "bool": {
+                                "should": [
+                                    {"term": {"visited": False}},
+                                    {"bool": {"must_not": {"exists": {"field": "visited"}}}}
+                                ],
+                                "minimum_should_match": 1
+                            }
+                        }
+                    ]
+                }
+            },
+            "collapse": {
+                "field": "host",
+                "inner_hits": {
+                    "name": "random_unvisited_url",
+                    "size": 1,
+                    "sort": [
+                        {
+                            "_script": {
+                                "type": "number",
+                                "script": {
+                                    "lang": "painless",
+                                    "source": "Math.random()"
+                                },
+                                "order": "asc"
+                            }
+                        }
+                    ]
+                }
+            },
+            "_source": ["host"]
+        }
+        response = db.con.search(index=URLS_INDEX, body=query_body)
+        results = response.get('hits', {}).get('hits', [])
+        if results:
+            urls = [{
+                "url": r["inner_hits"]["random_unvisited_url"]["hits"]["hits"][0]["_source"]["url"],
+                "host": r["_source"]["host"]
+            } for r in results]
+            random.shuffle(urls)
+            return urls
     return []
 
 def get_oldest_unvisited_urls_from_bucket(db, size=100):
@@ -322,8 +389,8 @@ def get_oldest_unvisited_urls_from_bucket(db, size=100):
 
         response = db.con.search(index=URLS_INDEX, body=query_body)
         hits = response.get('hits', {}).get('hits', [])
-
         if hits:
+            random.shuffle(hits)  # Shuffle the list in-place
             return [{
                 "url": hit["_source"]["url"],
                 "host": hit["_source"]["host"]
@@ -375,6 +442,7 @@ def get_random_host_domains(db, size=100):
         results = response.get('hits', {}).get('hits', [])
 
         if results:
+            random.shuffle(results)
             return [{
                 "url": r["inner_hits"]["random_hit"]["hits"]["hits"][0]["_source"]["url"],
                 "host": r["_source"]["host"]
@@ -484,6 +552,7 @@ def get_urls_from_least_visited_hosts(db, size=100):
         results = response.get('hits', {}).get('hits', [])
 
         if results:
+            random.shuffle(results)
             return [{
                 "url": r["inner_hits"]["least_visited_hit"]["hits"]["hits"][0]["_source"]["url"],
                 "host": r["_source"]["host"]
@@ -606,6 +675,7 @@ def get_least_covered_random_hosts(db, size=100):
                 })
 
         if results:
+            random.shuffle(results)
             return results
 
     return []
@@ -687,9 +757,28 @@ content_type_image_regex = [
         r"^image/x-photoshop$",         
         r"^image/x-coreldraw$",        
         r"^image/vnd\.wap\.wbmp$",
+        r"^image/x\.fb\.keyframes$",        
         r"^image/vnd\.microsoft\.icon$",
         r"^application/jpg$",        
     ]
+
+content_type_video_regex = [
+        r"^video/mp4$",
+        r"^video/ogg$",
+        r"^video/f4v$",
+        r"^video/m2ts$",
+        r"^video/webm$",
+        r"^video/MP2T$",
+        r"^video/mpeg$",
+        r"^video/x-m4v$",
+        r"^video/x-flv$",
+        r"^video/quicktime$",
+        r"^video/x-ms-wmv$",
+        r"^video/x-ms-asf$",
+        r"^video/x-msvideo$",
+        r"^video/vnd\.dlna\.mpeg-tts$",
+        r"^application/avi$",
+        ]
 
 content_type_plain_text_regex = [
         r"^\.js$",
@@ -858,7 +947,6 @@ content_type_all_others_regex = [
         r"^application/x-j$",
         r"^application/rar$",
         r"^application/zip$",
-        r"^application/avi$",
         r"^application/doc$",
         r"^application/xls$",
         r"^application/jwt$",
@@ -1014,18 +1102,4 @@ content_type_all_others_regex = [
         r"^multipart/form-data$",
         r"^multipart/x-mixed-replace$",
         r"^octet/stream$",
-        r"^video/mp4$",
-        r"^video/ogg$",
-        r"^video/f4v$",
-        r"^video/m2ts$",
-        r"^video/webm$",
-        r"^video/MP2T$",
-        r"^video/mpeg$",
-        r"^video/x-m4v$",
-        r"^video/x-flv$",
-        r"^video/quicktime$",
-        r"^video/x-ms-wmv$",
-        r"^video/x-ms-asf$",
-        r"^video/x-msvideo$",
-        r"^video/vnd\.dlna\.mpeg-tts$",
     ]

@@ -121,7 +121,8 @@ def extract_top_words_from_text(text: str) -> list[str]:
 
 def is_open_directory(content, content_url):
     host = urlsplit(content_url)[1]
-
+    hostnp=host.split(':')[0]
+    
     pattern = (
         r'<title>Index of /'                                 # Apache-style
         r'|<h1>Index of /'                                   # Apache-style H1
@@ -137,11 +138,55 @@ def is_open_directory(content, content_url):
         r'|<title>Directory Listing</title>' #Custom pattern
         r'|<h1>Listing of /' #Custom pattern
         r'|Powered by <a class="autoindex_a" href="http://autoindex.sourceforge.net/">AutoIndex PHP Script</a>' #AutoIndex
+        r'|<a href="\?C=N;O=D">\s*Name\s*</a>\s*<a href="\?C=M;O=A">\s*Last modified\s*</a>\s*<a href="\?C=S;O=A">\s*Size\s*</a>\s*<a href="\?C=D;O=A">\s*Description\s*</a>' #Custom
+        r'|<a href="\?C=N&amp;O=A">\s*File Name\s*</a>\s*&nbsp;\s*<a href="\?C=N&amp;O=D">\s*&nbsp;&darr;&nbsp;\s*</a></th>\s*<th style="width:20%">\s*<a href="\?C=S&amp;O=A">\s*File Size\s*</a>\s*&nbsp;\s*<a href="\?C=S&amp;O=D">\s*&nbsp;&darr;&nbsp;\s*</a>' #Custom
+        r'|<a href="\?C=N&amp;O=A">\s*File Name\s*</a>\s*(?:&nbsp;|\u00a0)\s*<a href="\?C=N&amp;O=D">\s*(?:&nbsp;|\u00a0)?(?:&darr;|\u2193)(?:&nbsp;|\u00a0)?\s*</a>[\s\S]*?<a href="\?C=S&amp;O=A">\s*File Size\s*</a>\s*(?:&nbsp;|\u00a0)\s*<a href="\?C=S&amp;O=D">\s*(?:&nbsp;|\u00a0)?(?:&darr;|\u2193)(?:&nbsp;|\u00a0)?\s*</a>' #Custom
+        r'|<meta\s+name="generator"\s+content="AList V\d+"\s*/?>' #AList
+        r'|<meta\scontent="AList V\d+"\sname="generator"/?>' #AList
+        r'|<div\s+id=["\']idx["\']>\s*<!--\s*do not remove\s*-->' #Custom
+        r'|<tr[^>]*class=["\']indexhead["\'][^>]*>.*Name.*Last modified.*Size.*Description' #Apache fancy index
+        r'|<pre>(?:\s*\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}\s+(?:AM|PM)?\s+\d+\s+<a href="[^"]+">[^<]+</a>\s*<br>\s*){2,}</pre>' #Apache Brute
+        r'|<html><head><title>' + hostnp + r' - /[^<]*</title></head><body><h1>' + hostnp + r' - /[^<]*</h1>'#light httpd
     )
-
     if re.search(pattern, content, re.IGNORECASE):
         print(f'### Is open directory - {content_url}')
         return True
+
+
+    # Clue 1: Check for keywords in meta tag (regardless of attribute order)
+    meta_keywords_match = re.search(
+        r'<meta[^>]*name=["\']keywords["\'][^>]*content=["\'](.*?)["\']|<meta[^>]*content=["\'](.*?)["\'][^>]*name=["\']keywords["\']',
+        content,
+        re.IGNORECASE
+    )
+    keywords = (
+        meta_keywords_match.group(1)
+        if meta_keywords_match and meta_keywords_match.group(1)
+        else meta_keywords_match.group(2)
+        if meta_keywords_match
+        else ''
+    )
+    clue_meta = bool(keywords) and any(
+        kw in keywords.lower() for kw in ['rclone', 'files', 'download']
+    )
+
+    # Check for links to directories ("/" at the end of hrefs)
+    dir_link_pattern = r'href=["\'][^"\']+/["\']'  # Match links ending with "/"
+    dir_links = re.findall(dir_link_pattern, content)
+    clue_links = len(dir_links) > 2
+
+    # Clue 3: Check for static assets
+    static_assets_match = re.search(r'\.(css|js|ico|png|jpg|jpeg|woff|woff2|ttf|svg)', content, re.IGNORECASE)
+    clue_static = bool(static_assets_match)
+
+    # Final clues list
+    clues = [clue_meta, clue_links, clue_static]
+
+    # Optional: print clues to debug
+    if sum(clues) == 3:
+        print(f'### Is open directory CLUE BASED - {content_url}')
+        return True
+
     return False
 
 def function_for_url(regexp_list):
@@ -281,11 +326,24 @@ def content_type_download(args):
     except bs4.builder.ParserRejectedMarkup as e:
         print(e)
         return False
+
+    #or use this block for debug
+    #isopendir = is_open_directory(str(soup), args['url'])
+    #if not isopendir:
+    #    print('Broken {}'.format(args['url']))
+    #    print(str(soup))
+    #    exit()
+    #else:
+    #    return True
+
     get_links(soup, args['url'],args['db'])
     words = ''
     if EXTRACT_WORDS:
         words = get_words_from_soup(soup)
+
+    #This is the original position
     isopendir = is_open_directory(str(soup), args['url'])
+
     db_insert_if_new_url(url=args['url'],content_type=args['content_type'],isopendir=isopendir,visited=True,words=words,source='content_type_html_regex',parent_host=args['parent_host'],db=args['db'])
     return True
 
@@ -621,4 +679,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

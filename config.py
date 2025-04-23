@@ -13,9 +13,10 @@ DOWNLOAD_AUDIOS=True
 AUDIOS_FOLDER='audios'
 DOWNLOAD_PDFS=True
 PDFS_FOLDER='pdfs'
-#Always use the slash when dealing with domain
-INITIAL_URL='https://www.uol.com.br/'
-ITERATIONS=2
+DOWNLOAD_VIDEOS=True
+VIDEOS_FOLDER='videos'
+INITIAL_URL='http://httpforever.com/'
+ITERATIONS=10
 NSFW_MIN_PROBABILITY=.78
 CATEGORIZE_NSFW=True
 SAVE_NSFW=True
@@ -31,9 +32,9 @@ GROUP_DOMAIN_LEVEL=2
 ELASTICSEARCH_HOST="127.0.0.1"
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_USER='elastic'
-ELASTICSEARCH_PASSWORD='setupyourpasswordhere'
+ELASTICSEARCH_PASSWORD='yourpassword'
 ELASTICSEARCH_CA_CERT_PATH=None
-ELASTICSEARCH_RANDOM_BUCKETS=3
+ELASTICSEARCH_RANDOM_BUCKETS=7
 MAX_ES_RETRIES=10
 ES_RETRY_DELAY=1
 WORDS_REMOVE_SPECIAL_CHARS=True
@@ -48,6 +49,14 @@ FORCE_IMAGE_LOAD=True
 RANDOM_SITES_QUEUE=100
 MAX_DIR_LEVELS=7
 MAX_HOST_LEVELS=7
+#URL_FILE='urls.json'
+URL_FILE='urls-fullw.json'
+#URL File format
+#[
+#{"url": "http://odd.com/subdir/", "host": "odd.com"},
+#{"url": "http://nuu.com/a/b/c/", "host": "nuu.com"},
+#]
+
 
 #be_greedy = True - Save urls to database that might not work, since have not matched any regex.
 BE_GREEDY=False

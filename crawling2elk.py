@@ -147,6 +147,16 @@ def is_open_directory(content, content_url):
         r'|<tr[^>]*class=["\']indexhead["\'][^>]*>.*Name.*Last modified.*Size.*Description' #Apache fancy index
         r'|<pre>(?:\s*\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}\s+(?:AM|PM)?\s+\d+\s+<a href="[^"]+">[^<]+</a>\s*<br>\s*){2,}</pre>' #Apache Brute
         r'|<html><head><title>' + hostnp + r' - /[^<]*</title></head><body><h1>' + hostnp + r' - /[^<]*</h1>'#light httpd
+        r'|<meta\s+name=["\']description["\']\s+content=["\']Yet another directory listing, powered by Directory Lister\.["\']\s*/?>' #Directory Lister
+        r'|<meta\scontent="Yet\sanother\sdirectory\slisting,\spowered\sby\sDirectory\sLister\."\sname="description"/>' #Directory Lister
+        r'|<title>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\s*-\s*/</title>'
+        r'|<title>Index of .*?</title>'
+        r'|<h1>Index of .*?</h1>'
+        r'|<h1>文件索引.*?</h1>'
+        r'|Directory listing for .*'
+        r'|<ListBucketResult\s+xmlns=[\'\"].*?[\'\"]>'
+        r'|(OneDrive\s+Index|Vercel\s+Index|class=.*\b(flex|grid).*\bitems-center.*justify-center\b|Search\s+\.\.\.)'
+        r'|<tr\s+class=["\']indexhead["\']>\s*<th\s+class=["\']indexcolicon["\']>\s*<img\s+src=["\']/icons/blank\.gif["\']\s+alt=["\']\[ICO\]["\']\s*/?>\s*</th>\s*<th\s+class=["\']indexcolname["\']>\s*<a\s+href=["\']\?C=N;O=A["\']>\s*Name\s*</a>\s*</th>\s*<th\s+class=["\']indexcollastmod["\']>\s*<a\s+href=["\']\?C=M;O=A["\']>\s*Last\s+modified\s*</a>\s*</th>\s*<th\s+class=["\']indexcolsize["\']>\s*<a\s+href=["\']\?C=S;O=A["\']>\s*Size\s*</a>\s*</th>\s*</tr>'
     )
     if re.search(pattern, content, re.IGNORECASE):
         print(f'### Is open directory - {content_url}')

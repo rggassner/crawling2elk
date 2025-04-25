@@ -157,6 +157,8 @@ def is_open_directory(content, content_url):
         r'|<ListBucketResult\s+xmlns=[\'\"].*?[\'\"]>'
         r'|(OneDrive\s+Index|Vercel\s+Index|class=.*\b(flex|grid).*\bitems-center.*justify-center\b|Search\s+\.\.\.)'
         r'|<tr\s+class=["\']indexhead["\']>\s*<th\s+class=["\']indexcolicon["\']>\s*<img\s+src=["\']/icons/blank\.gif["\']\s+alt=["\']\[ICO\]["\']\s*/?>\s*</th>\s*<th\s+class=["\']indexcolname["\']>\s*<a\s+href=["\']\?C=N;O=A["\']>\s*Name\s*</a>\s*</th>\s*<th\s+class=["\']indexcollastmod["\']>\s*<a\s+href=["\']\?C=M;O=A["\']>\s*Last\s+modified\s*</a>\s*</th>\s*<th\s+class=["\']indexcolsize["\']>\s*<a\s+href=["\']\?C=S;O=A["\']>\s*Size\s*</a>\s*</th>\s*</tr>'
+        r'|\.calibreRangeWrapper'
+        r'|<body\sstyle="font-size:medium">[a-z]*\sFolder\s*\t*<a\shref="/list\?dir=1">'
     )
     if re.search(pattern, content, re.IGNORECASE):
         print(f'### Is open directory - {content_url}')

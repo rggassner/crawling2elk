@@ -161,6 +161,11 @@ This makes the engine modular and powerful for specialized scraping and analysis
     
 * * *
 
+## Related Stuff
+
+- https://wiki.archiveteam.org/index.php?title=ArchiveBot
+
+* * *
 ## 💬 Author Notes
 
 Built for performance, flexibility, and stealth. Use responsibly.

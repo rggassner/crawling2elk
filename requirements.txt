@@ -9,4 +9,4 @@ pip3 install opennsfw2
 pip3 install tensorflow
 pip3 install random_user_agent
 pip3 install tornado
-pip install elasticsearch==8.17.2
+pip3 install elasticsearch==8.17.2

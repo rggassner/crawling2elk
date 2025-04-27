@@ -109,6 +109,14 @@ def get_words_from_soup(soup) -> list[str]:
     combined_text = " ".join(text_parts)
     return extract_top_words_from_text(combined_text)
 
+def get_min_webcontent(soup):
+    text_parts = [
+        t for t in soup.find_all(string=True)
+        if t.parent.name not in soup_tag_blocklist
+    ]
+    combined_text = " ".join(text_parts)
+    return combined_text
+
 def extract_top_words_from_text(text: str) -> list[str]:
     if WORDS_REMOVE_SPECIAL_CHARS:
         text = re.sub(r'[^\w\s]', ' ', text, flags=re.UNICODE)
@@ -164,42 +172,6 @@ def is_open_directory(content, content_url):
         if re.search(pat, content, re.IGNORECASE):
             print(f'### Is open directory - {content_url} - matched pattern: {pat}')
             return True
-    return False
-
-    # Clue 1: Check for keywords in meta tag (regardless of attribute order)
-    meta_keywords_match = re.search(
-        r'<meta[^>]*name=["\']keywords["\'][^>]*content=["\'](.*?)["\']|<meta[^>]*content=["\'](.*?)["\'][^>]*name=["\']keywords["\']',
-        content,
-        re.IGNORECASE
-    )
-    keywords = (
-        meta_keywords_match.group(1)
-        if meta_keywords_match and meta_keywords_match.group(1)
-        else meta_keywords_match.group(2)
-        if meta_keywords_match
-        else ''
-    )
-    clue_meta = bool(keywords) and any(
-        kw in keywords.lower() for kw in ['rclone', 'files', 'download']
-    )
-
-    # Check for links to directories ("/" at the end of hrefs)
-    dir_link_pattern = r'href=["\'][^"\']+/["\']'  # Match links ending with "/"
-    dir_links = re.findall(dir_link_pattern, content)
-    clue_links = len(dir_links) > 2
-
-    # Clue 3: Check for static assets
-    static_assets_match = re.search(r'\.(css|js|ico|png|jpg|jpeg|woff|woff2|ttf|svg)', content, re.IGNORECASE)
-    clue_static = bool(static_assets_match)
-
-    # Final clues list
-    clues = [clue_meta, clue_links, clue_static]
-
-    # Optional: print clues to debug
-    if sum(clues) == 3:
-        print(f'### Is open directory CLUE BASED - {content_url}')
-        return True
-
     return False
 
 def function_for_url(regexp_list):
@@ -332,7 +304,11 @@ def insert_directory_tree(content_url,db):
 @function_for_content_type(content_type_html_regex)
 def content_type_download(args):
     try:
-        soup = BeautifulSoup(args['content'], "html.parser")
+        content = args['content']
+        # Ensure content is decoded properly
+        if isinstance(content, bytes):
+            content = content.decode('utf-8', errors='replace')
+        soup = BeautifulSoup(content, "html.parser")
     except UnboundLocalError as e:
         print(e)
         return False
@@ -340,24 +316,23 @@ def content_type_download(args):
         print(e)
         return False
 
-    #or use this block for debug
-    #isopendir = is_open_directory(str(soup), args['url'])
-    #if not isopendir:
-    #    print('Broken {}'.format(args['url']))
-    #    print(str(soup))
-    #    exit()
-    #else:
-    #    return True
-
     get_links(soup, args['url'],args['db'])
     words = ''
+    min_webcontent=''
+    raw_webcontent=''
     if EXTRACT_WORDS:
         words = get_words_from_soup(soup)
+
+    if EXTRACT_RAW_WEBCONTENT:
+        raw_webcontent=str(soup)[:MAX_WEBCONTENT_SIZE]
+
+    if EXTRACT_MIN_WEBCONTENT:
+        min_webcontent=get_min_webcontent(soup)[:MAX_WEBCONTENT_SIZE]
 
     #This is the original position
     isopendir = is_open_directory(str(soup), args['url'])
 
-    db_insert_if_new_url(url=args['url'],content_type=args['content_type'],isopendir=isopendir,visited=True,words=words,source='content_type_html_regex',parent_host=args['parent_host'],db=args['db'])
+    db_insert_if_new_url(url=args['url'],content_type=args['content_type'],isopendir=isopendir,visited=True,words=words,min_webcontent=min_webcontent,raw_webcontent=raw_webcontent,source='content_type_html_regex',parent_host=args['parent_host'],db=args['db'])
     return True
 
 @function_for_content_type(content_type_plain_text_regex)

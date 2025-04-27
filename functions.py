@@ -104,7 +104,7 @@ def remove_jsessionid_with_semicolon(url):
     cleaned_url = re.sub(pattern, '', url)
     return cleaned_url
 
-def db_insert_if_new_url(url='', isopendir=None, visited=None, source='', content_type='', words='',
+def db_insert_if_new_url(url='', isopendir=None, visited=None, source='', content_type='', words='', min_webcontent='', raw_webcontent='',
                          isnsfw='', resolution='', parent_host='', email=None, db=None, debug=False):
 
     if debug:
@@ -166,6 +166,8 @@ def db_insert_if_new_url(url='', isopendir=None, visited=None, source='', conten
         doc = {}
         if content_type: doc["content_type"] = content_type
         if words: doc["words"] = words
+        if min_webcontent: doc["min_webcontent"] = min_webcontent
+        if raw_webcontent: doc["raw_webcontent"] = raw_webcontent
         if isopendir is not None:
             doc["isopendir"] = bool(isopendir)
         if isnsfw: doc["isnsfw"] = float(isnsfw)
@@ -264,25 +266,26 @@ def db_insert_if_new_url(url='', isopendir=None, visited=None, source='', conten
 def get_url_from_file():
     with open(URL_FILE, 'r', encoding='utf-8') as file:
         urls=json.load(file)
-        random.shuffle(urls)
+        #random.shuffle(urls)
         return urls
 
 def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
     """Randomly selects between different spreading strategies."""
     try:
         choice = random.random()
-        if choice < 0.5:
+        if choice < 0.1:
+            print('From file')
             return get_url_from_file()
-        elif choice < 0.6:
+        elif choice < 0.2:
             print('Fewest urls')
             return get_least_covered_random_hosts(db, size=size)
-        elif choice < 0.7:
+        elif choice < 0.4:
             print('Less visited')
             return get_urls_from_least_visited_hosts(db, size=size)
-        elif choice < 0.8:
+        elif choice < 0.6:
             print('Oldest')
             return get_oldest_unvisited_urls_from_bucket(db, size=size)
-        elif choice < 0.9:
+        elif choice < 0.8:
             print('Host Prefix')
             return get_urls_by_random_bucket_and_host_prefix(db, size=size)
         else:
@@ -487,7 +490,10 @@ def db_create_database(initial_url, db):
                 "resolution": {"type": "integer"},
                 "random_bucket": {"type": "integer"},
                 "created_at": {"type": "date"},
-                "updated_at": {"type": "date"}
+                "updated_at": {"type": "date"},
+                "opendir_category": {"type": "keyword"},
+                "min_webcontent": {"type": "text"},
+                "raw_webcontent": {"type": "text"}
             }
         }
     }
@@ -754,6 +760,7 @@ content_type_image_regex = [
         r"^image/vnd\.dwg$",    
         r"^image/svg\+xml$",
         r"^image/x-ms-bmp$",        
+        r"^image/x-xbitmap$",        
         r"^image/x-photoshop$",         
         r"^image/x-coreldraw$",        
         r"^image/vnd\.wap\.wbmp$",
@@ -927,6 +934,7 @@ content_type_all_others_regex = [
         r"^\*$",
         r"^None$",
         r"^file$",
+        r"^woff$",
         r"^\*/\*$",
         r"^woff2$",
         r"^unknown$",
@@ -1022,6 +1030,7 @@ content_type_all_others_regex = [
         r"^application/javascript$",
         r"^application/oct-stream$",
         r"^application/vnd\.yt-ump$",
+        r"^application/octetstream$",
         r"^application/x-font-woff$",
         r"^application/x-xpinstall$",
         r"^application/x-httpd-php$",

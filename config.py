@@ -40,8 +40,9 @@ ES_RETRY_DELAY=1
 WORDS_REMOVE_SPECIAL_CHARS=True
 WORDS_TO_LOWER=True
 WORDS_MIN_LEN=3
+#WORDS_MAX_LEN * WORDS_MAX_WORDS should be under 1 million for a default elastic search env
 WORDS_MAX_LEN=40
-WORDS_MAX_WORDS=5000
+WORDS_MAX_WORDS=24999
 URLS_INDEX='urls'
 BLOCK_CSS=False
 PERFORMANCE_OPTIMIZED=False
@@ -49,8 +50,11 @@ FORCE_IMAGE_LOAD=True
 RANDOM_SITES_QUEUE=100
 MAX_DIR_LEVELS=7
 MAX_HOST_LEVELS=7
-#URL_FILE='urls.json'
-URL_FILE='urls-fullw.json'
+URL_FILE='urls.json'
+EXTRACT_RAW_WEBCONTENT=True
+EXTRACT_MIN_WEBCONTENT=True
+MAX_WEBCONTENT_SIZE=999999 #should be under 1 million for a default elastic search env
+
 #URL File format
 #[
 #{"url": "http://odd.com/subdir/", "host": "odd.com"},

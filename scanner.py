@@ -2,27 +2,20 @@
 import asyncio
 import aiohttp
 import random
+import warnings
+import urllib3
 import argparse
 from ipaddress import IPv4Address, IPv4Network
+from config import *
+from functions import *
 import ssl
 import re
 from fake_useragent import UserAgent
+from urllib3.exceptions import InsecureRequestWarning
+warnings.filterwarnings("ignore", category=InsecureRequestWarning)
+warnings.filterwarnings("ignore", category=Warning, message=".*verify_certs=False is insecure.*")
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-file_path = "/usr/share/nmap/nmap-services"
-
-RANDOM_PORT_CHANCE = 0.1
-
-EXCLUDED_NETWORKS = [
-    IPv4Network("10.0.0.0/8"),
-    IPv4Network("172.16.0.0/12"),
-    IPv4Network("192.168.0.0/16"),
-    IPv4Network("127.0.0.0/8"),
-    IPv4Network("0.0.0.0/8"),
-    IPv4Network("224.0.0.0/4"),
-    IPv4Network("240.0.0.0/4"),
-    IPv4Network("100.64.0.0/10"),
-    IPv4Network("169.254.0.0/16"),
-]
 
 def load_nmap_services(file_path):
     """Load and parse nmap-services file to get port probabilities."""
@@ -95,11 +88,12 @@ async def check_http(ip, port, protocol, verbose=False):
             print(f"Error scanning {url} - {e}")
     return None
 
-def save_to_database(ip, port, protocol, status_code, verbose=False):
+def save_to_database(ip, port, protocol, status_code, verbose=False,db=None):
     if status_code is not None:
-        print('Should save  {}://{}:{}  status_code {} '.format(protocol,ip,port, status_code))
+        db_insert_if_new_url(url=protocol+'://'+ip+':'+str(port), visited=False, source='port_scanner', parent_host=ip, db=db)
+        print('Saved  {}://{}:{} status_code {} '.format(protocol,ip,port, status_code))
 
-async def scan_ips(ip_list, concurrency=4, verbose=False):
+async def scan_ips(ip_list, concurrency=4, verbose=False,db=None):
     """
     Scan a randomized list of IPs for a randomly selected protocol and port.
     """
@@ -115,32 +109,75 @@ async def scan_ips(ip_list, concurrency=4, verbose=False):
         async with sem:
             http_code = await check_http(ip, port, protocol, verbose)
             if http_code:
-                save_to_database(ip, port, protocol,http_code,verbose=verbose)
+                save_to_database(ip, port, protocol,http_code,verbose=verbose,db=db)
     tasks = [bound_check(ip) for ip in ip_list]
     await asyncio.gather(*tasks)
 
-def generate_random_ips(count):
+def generate_random_ips(count, include_networks=None, exclude_networks=None):
     """
-    Generate a random list of IPv4 addresses, excluding specific ranges.
+    Generate a random list of IPv4 addresses within specified networks, excluding specific ranges.
+    
+    Args:
+        count: Number of IP addresses to generate
+        include_networks: List of network strings (e.g. ['192.168.0.0/24', '10.0.0.0/8'])
+                          Default: ['0.0.0.0/0'] (all IPv4 addresses)
+        exclude_networks: List of network strings to exclude
+                          Default: Global EXCLUDED_NETWORKS
+        
+    Returns:
+        List of random IP addresses as strings
     """
+    # Convert string networks to IPv4Network objects
+    if include_networks is None:
+        include_networks_obj = [IPv4Network('0.0.0.0/0')]  # Default to all IPv4 addresses
+    else:
+        include_networks_obj = [IPv4Network(network) for network in include_networks]
+        
+    if exclude_networks is None:
+        exclude_networks_obj = EXCLUDED_NETWORKS  # Assuming this is defined globally
+    else:
+        exclude_networks_obj = [IPv4Network(network) for network in exclude_networks]
+    
+    # Calculate the total number of IPs in all included networks
+    network_ranges = []
+    total_ips = 0
+    
+    for network in include_networks_obj:
+        size = network.num_addresses
+        network_ranges.append((total_ips, total_ips + size - 1, network))
+        total_ips += size
+    
     ips = []
     while len(ips) < count:
-        ip = IPv4Address(random.randint(0, 2**32 - 1))
-        if not any(ip in network for network in EXCLUDED_NETWORKS):
+        # Pick a random number within the total range
+        random_index = random.randint(0, total_ips - 1)
+        
+        # Find which network this index belongs to
+        for start, end, network in network_ranges:
+            if start <= random_index <= end:
+                # Calculate the specific IP within this network
+                ip_index = random_index - start
+                ip = IPv4Address(int(network.network_address) + ip_index)
+                break
+        
+        # Check if the IP is in any of the exclude networks
+        if not any(ip in network for network in exclude_networks_obj):
             ips.append(str(ip))
+    
     return ips
 
 if __name__ == "__main__":
+    db = DatabaseConnection()
     parser = argparse.ArgumentParser(description="Scan IP addresses for open ports and services.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
     args = parser.parse_args()
 
     # Load ports and their probabilities
-    ports = load_nmap_services(file_path)
+    ports = load_nmap_services(SERVICES_INVENTORY)
 
     ip_count = 4096  # Number of IPs to scan in each run
     concurrency = 2
-    ip_list = generate_random_ips(ip_count)
-    asyncio.run(scan_ips(ip_list, concurrency, args.verbose))
+    ip_list = generate_random_ips(ip_count,include_networks=SCAN_NETWORKS,exclude_networks=NOSCAN_NETWORKS)
+    asyncio.run(scan_ips(ip_list, concurrency, args.verbose,db=db))
     print("Scan completed.")
 

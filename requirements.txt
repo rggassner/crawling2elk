@@ -10,3 +10,4 @@ tensorflow
 random_user_agent
 tornado
 elasticsearch==8.17.2
+aiohttp

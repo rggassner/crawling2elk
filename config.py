@@ -9,17 +9,17 @@ EXTRACT_WORDS=True
 HUNT_OPEN_DIRECTORIES=True
 DOWNLOAD_MIDIS=True
 MIDIS_FOLDER='midis'
-DOWNLOAD_AUDIOS=True
+DOWNLOAD_AUDIOS=False
 AUDIOS_FOLDER='audios'
-DOWNLOAD_PDFS=True
+DOWNLOAD_PDFS=False
 PDFS_FOLDER='pdfs'
-DOWNLOAD_VIDEOS=True
+DOWNLOAD_VIDEOS=False
 VIDEOS_FOLDER='videos'
-INITIAL_URL='http://httpforever.com/'
+INITIAL_URL='https://www.uol.com.br'
 ITERATIONS=10
 NSFW_MIN_PROBABILITY=.78
-CATEGORIZE_NSFW=True
-SAVE_NSFW=True
+CATEGORIZE_NSFW=False
+SAVE_NSFW=False
 NSFW_FOLDER='images/nsfw'
 SAVE_SFW=False
 SFW_FOLDER='images/sfw'
@@ -32,7 +32,7 @@ GROUP_DOMAIN_LEVEL=2
 ELASTICSEARCH_HOST="127.0.0.1"
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_USER='elastic'
-ELASTICSEARCH_PASSWORD='yourpassword'
+ELASTICSEARCH_PASSWORD='yourelasticpassword'
 ELASTICSEARCH_CA_CERT_PATH=None
 ELASTICSEARCH_RANDOM_BUCKETS=7
 MAX_ES_RETRIES=10
@@ -46,21 +46,19 @@ WORDS_MAX_WORDS=24999
 URLS_INDEX='urls'
 BLOCK_CSS=False
 PERFORMANCE_OPTIMIZED=False
-FORCE_IMAGE_LOAD=True
+FORCE_IMAGE_LOAD=False
 RANDOM_SITES_QUEUE=100
 MAX_DIR_LEVELS=7
 MAX_HOST_LEVELS=7
-URL_FILE='urls.json'
 EXTRACT_RAW_WEBCONTENT=True
 EXTRACT_MIN_WEBCONTENT=True
 MAX_WEBCONTENT_SIZE=999999 #should be under 1 million for a default elastic search env
-
+URL_FILE='urls.json'
 #URL File format
 #[
 #{"url": "http://odd.com/subdir/", "host": "odd.com"},
-#{"url": "http://nuu.com/a/b/c/", "host": "nuu.com"},
+#{"url": "http://nuu.com/a/b/c/", "host": "nuu.com"}
 #]
-
 
 #be_greedy = True - Save urls to database that might not work, since have not matched any regex.
 BE_GREEDY=False
@@ -68,7 +66,7 @@ BE_GREEDY=False
 # host_regex_block_list do not crawl these domains. 
 host_regex_block_list = [
     r'localhost:4443$',
-    r'(^|\.)instagram\.com$',
+    r'(^|\.)googlesyndication\.com$',
 ]
 
 #do not crawl urls that match any of these regexes
@@ -78,3 +76,24 @@ url_regex_block_list = [
 ]
 
 host_regex_allow_list = [r'.*']
+
+#Scanner options
+SERVICES_INVENTORY = "/usr/share/nmap/nmap-services"
+RANDOM_PORT_CHANCE = 0.1
+
+SCAN_NETWORKS = [
+    "0.0.0.0/0"
+]
+
+NOSCAN_NETWORKS = [
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+    "127.0.0.0/8",
+    "0.0.0.0/8",
+    "224.0.0.0/4",
+    "240.0.0.0/4",
+    "100.64.0.0/10",
+    "169.254.0.0/16"
+]
+

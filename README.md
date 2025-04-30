@@ -84,6 +84,8 @@ You’ll need the following installed:
 -   `sudo apt install expect`
   
 -   `sudo apt install chromium-chromedriver`
+  
+-   `sudo apt install nmap`
 
 Install dependencies:
 

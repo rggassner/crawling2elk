@@ -510,7 +510,6 @@ def get_page(url, driver, db):
             if request.response:
                 # Check if the response status code indicates redirection
                 status_code = request.response.status_code
-                #print('Status code {} for url {}'.format(status_code,url))
                 if status_code in [301, 302, 303, 307, 308]:  # Redirection status codes
                     # Get the new URL from the Location header
                     db_insert_if_new_url(url=url,visited=True,isopendir=False,source='get_page.redirect',parent_host=parent_host,db=db)
@@ -625,7 +624,7 @@ def crawler(db):
                 not is_url_block_listed(target_url['url'])
             ):
                 try:
-                    print('url {}'.format(target_url['url']))
+                    print('    {}'.format(target_url['url']))
                     del driver.requests
                     get_page(target_url['url'], driver,db)
                     if HUNT_OPEN_DIRECTORIES:
@@ -635,27 +634,58 @@ def crawler(db):
         driver.quit()
 
 def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
-    """Randomly selects between different spreading strategies."""
+    """
+    Randomly selects between different spreading strategies based on weighted probabilities.
+
+    Args:
+        db: Database connection
+        size: Number of domains to retrieve
+    Returns:
+        List of domains selected by the chosen method
+    """
+    # Default weights if none provided
+    if METHOD_WEIGHTS is None:
+        method_weights = {
+            "from_file": 0.0,
+            "fewest_urls": 0.1,
+            "less_visited": 0.2,
+            "oldest": 0.2,
+            "host_prefix": 0.2,
+            "random": 0.2
+        }
+    else:
+        method_weights=METHOD_WEIGHTS
+
+    # Filter out methods with zero weight
+    active_methods = {name: weight for name, weight in method_weights.items() if weight > 0}
+
+    # If no methods have weights > 0, return empty list
+    if not active_methods:
+        print("No active methods configured (all weights are 0)")
+        return []
+
+    # Normalize weights to sum to 1.0
+    total_weight = sum(active_methods.values())
+    normalized_weights = {name: weight/total_weight for name, weight in active_methods.items()}
+
+    # Set up method mapping
+    method_functions = {
+        "from_file": lambda: get_url_from_file(),
+        "fewest_urls": lambda: get_least_covered_random_hosts(db, size=size),
+        "less_visited": lambda: get_urls_from_least_visited_hosts(db, size=size),
+        "oldest": lambda: get_oldest_unvisited_urls_from_bucket(db, size=size),
+        "host_prefix": lambda: get_urls_by_random_bucket_and_host_prefix(db, size=size),
+        "random": lambda: get_random_host_domains(db, size=size)
+    }
+
     try:
-        choice = random.random()
-        if choice < 0.1:
-            print('From file')
-            return get_url_from_file()
-        elif choice < 0.2:
-            print('Fewest urls')
-            return get_least_covered_random_hosts(db, size=size)
-        elif choice < 0.4:
-            print('Less visited')
-            return get_urls_from_least_visited_hosts(db, size=size)
-        elif choice < 0.6:
-            print('Oldest')
-            return get_oldest_unvisited_urls_from_bucket(db, size=size)
-        elif choice < 0.8:
-            print('Host Prefix')
-            return get_urls_by_random_bucket_and_host_prefix(db, size=size)
-        else:
-            print('Random')
-            return get_random_host_domains(db, size=size)
+        # Choose method based on normalized weights
+        methods = list(normalized_weights.keys())
+        weights = list(normalized_weights.values())
+        chosen_method = random.choices(methods, weights=weights, k=1)[0]
+        print(f'Selected method: \033[32m{chosen_method}\033[0m')
+        return method_functions[chosen_method]()
+
     except NotFoundError as e:
         if "index_not_found_exception" in str(e):
             print("Elasticsearch index missing. Creating now...")
@@ -666,9 +696,8 @@ def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
         print("Elasticsearch request error:", e)
         return []
     except Exception as e:
-        print("Unhandled error in get_random_unvisited_domains:", e)
+        print(f"Unhandled error in get_random_unvisited_domains: {e}")
         return []
-    return []
 
 def get_url_from_file():
     with open(URL_FILE, 'r', encoding='utf-8') as file:
@@ -680,6 +709,7 @@ def get_least_covered_random_hosts(db, size=100):
     """Returns 'size' hosts from a random bucket with the fewest unvisited URLs, and one random URL per host."""
     for attempt in range(MAX_ES_RETRIES):
         random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
+        print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
 
         # Step 1: Get hosts with fewest unvisited URLs
         agg_query = {
@@ -714,6 +744,8 @@ def get_least_covered_random_hosts(db, size=100):
         agg_response = db.con.search(index=URLS_INDEX, body=agg_query)
         buckets = agg_response.get("aggregations", {}).get("hosts", {}).get("buckets", [])
         hosts = [bucket["key"] for bucket in buckets]
+        for bucket in buckets:
+            print('    \033[35m{} \t {}\033[0m'.format(bucket['doc_count'],bucket['key']))
 
         if not hosts:
             continue
@@ -772,6 +804,7 @@ def get_urls_from_least_visited_hosts(db, size=100):
     """Fetch 1 truly unvisited URL per host from a random bucket."""
     for attempt in range(MAX_ES_RETRIES):
         random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
+        print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
 
         query_body = {
             "size": size,
@@ -815,7 +848,8 @@ def get_urls_from_least_visited_hosts(db, size=100):
 
         response = db.con.search(index=URLS_INDEX, body=query_body)
         results = response.get('hits', {}).get('hits', [])
-
+        for result in results:
+            print('    \033[35m{} \t {}\033[0m'.format(result['_score'],result['_source']['host']))
         if results:
             random.shuffle(results)
             return [{

@@ -1,34 +1,63 @@
 #!/usr/bin/python3
+
+#INITIAL_URL='https://crawler-test.com/'
+INITIAL_URL='https://crawler-test.com/'
+
+#Selenium config
 SELENIUM_WIDTH=1920
 SELENIUM_HEIGHT=1080
-EMBED_PORT="4443"
 USE_PROXY=False
 PROXY_HOST='http://10.20.10.19:8123'
+DIRECT_LINK_DOWNLOAD_FOLDER='/dev/null'
+BLOCK_CSS=False
+PERFORMANCE_OPTIMIZED=False
+FORCE_IMAGE_LOAD=False
+
+#How long will it  wait until consider the url is not responding
+#This will deal with pages asking for basic authentication, and
+#streaming urls that never ends.
 MAX_DOWNLOAD_TIME = 120
-EXTRACT_WORDS=True
-HUNT_OPEN_DIRECTORIES=True
+
+#How many iterations should the python script runs. This does not
+#apply to the wrapper, that makes it run continuously.
+ITERATIONS=10
+
+#What and where to save
 DOWNLOAD_MIDIS=True
 MIDIS_FOLDER='midis'
+
 DOWNLOAD_AUDIOS=False
 AUDIOS_FOLDER='audios'
+
 DOWNLOAD_PDFS=False
 PDFS_FOLDER='pdfs'
+
 DOWNLOAD_VIDEOS=False
 VIDEOS_FOLDER='videos'
-INITIAL_URL='https://www.uol.com.br'
-ITERATIONS=10
-NSFW_MIN_PROBABILITY=.78
+
+SAVE_ALL_IMAGES=False
+IMAGES_FOLDER='images'
+
+#NonSafeForWork parameters
 CATEGORIZE_NSFW=False
+NSFW_MIN_PROBABILITY=.78
+MIN_NSFW_RES = 64 * 64
+
 SAVE_NSFW=False
 NSFW_FOLDER='images/nsfw'
 SAVE_SFW=False
 SFW_FOLDER='images/sfw'
-MIN_NSFW_RES = 64 * 64
-SAVE_ALL_IMAGES=False
-IMAGES_FOLDER='images'
-DIRECT_LINK_DOWNLOAD_FOLDER='/dev/null'
+
+#This will include all directories from tree
+#might sound aggressive for some websites
+HUNT_OPEN_DIRECTORIES=True
+
+#Selenium-wire don't do well with http, so we launch a https
+#localhost webservice that allows the content to be embeded and
+#crawled
+EMBED_PORT="4443"
 HTTPS_EMBED='https://localhost:'+EMBED_PORT+'/embed.html?url='
-GROUP_DOMAIN_LEVEL=2
+
 ELASTICSEARCH_HOST="127.0.0.1"
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_USER='elastic'
@@ -37,27 +66,31 @@ ELASTICSEARCH_CA_CERT_PATH=None
 ELASTICSEARCH_RANDOM_BUCKETS=7
 MAX_ES_RETRIES=10
 ES_RETRY_DELAY=1
+URLS_INDEX='urls'
+
+#Word extraction
+EXTRACT_WORDS=True
 WORDS_REMOVE_SPECIAL_CHARS=True
 WORDS_TO_LOWER=True
 WORDS_MIN_LEN=3
 #WORDS_MAX_LEN * WORDS_MAX_WORDS should be under 1 million for a default elastic search env
 WORDS_MAX_LEN=40
 WORDS_MAX_WORDS=24999
-URLS_INDEX='urls'
-BLOCK_CSS=False
-PERFORMANCE_OPTIMIZED=False
-FORCE_IMAGE_LOAD=False
+
 RANDOM_SITES_QUEUE=100
+
 MAX_DIR_LEVELS=7
 MAX_HOST_LEVELS=7
+
 EXTRACT_RAW_WEBCONTENT=True
 EXTRACT_MIN_WEBCONTENT=True
+
 MAX_WEBCONTENT_SIZE=999999 #should be under 1 million for a default elastic search env
 URL_FILE='urls.json'
 #URL File format
 #[
-#{"url": "http://odd.com/subdir/", "host": "odd.com"},
-#{"url": "http://nuu.com/a/b/c/", "host": "nuu.com"}
+#{"url": "https://crawler-test.com/", "host": "crawler-test.com"},
+#{"url": "https://crawler-test.com/content/custom_text", "host": "crawler-test.com"}
 #]
 
 #be_greedy = True - Save urls to database that might not work, since have not matched any regex.
@@ -76,6 +109,15 @@ url_regex_block_list = [
 ]
 
 host_regex_allow_list = [r'.*']
+
+METHOD_WEIGHTS = {
+    "from_file": 0,
+    "fewest_urls": 4,
+    "less_visited": 3,
+    "oldest": 1,
+    "host_prefix": 2,
+    "random": 1
+}
 
 #Scanner options
 SERVICES_INVENTORY = "/usr/share/nmap/nmap-services"
@@ -96,4 +138,3 @@ NOSCAN_NETWORKS = [
     "100.64.0.0/10",
     "169.254.0.0/16"
 ]
-

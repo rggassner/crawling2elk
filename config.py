@@ -35,17 +35,19 @@ PDFS_FOLDER='pdfs'
 DOWNLOAD_VIDEOS=False
 VIDEOS_FOLDER='videos'
 
-SAVE_ALL_IMAGES=False
+DOWNLOAD_ALL_IMAGES=False
 IMAGES_FOLDER='images'
+
+DOWNLOAD_COMPRESSEDS=True
+COMPRESSEDS_FOLDER='compressed'
 
 #NonSafeForWork parameters
 CATEGORIZE_NSFW=False
 NSFW_MIN_PROBABILITY=.78
 MIN_NSFW_RES = 64 * 64
-
-SAVE_NSFW=False
+DOWNLOAD_NSFW=False
 NSFW_FOLDER='images/nsfw'
-SAVE_SFW=False
+DOWNLOAD_SFW=False
 SFW_FOLDER='images/sfw'
 
 #This will include all directories from tree
@@ -61,7 +63,7 @@ HTTPS_EMBED='https://localhost:'+EMBED_PORT+'/embed.html?url='
 ELASTICSEARCH_HOST="127.0.0.1"
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_USER='elastic'
-ELASTICSEARCH_PASSWORD='yourelasticpassword'
+ELASTICSEARCH_PASSWORD='yourpasswordhere'
 ELASTICSEARCH_CA_CERT_PATH=None
 ELASTICSEARCH_RANDOM_BUCKETS=7
 MAX_ES_RETRIES=10
@@ -111,12 +113,12 @@ url_regex_block_list = [
 host_regex_allow_list = [r'.*']
 
 METHOD_WEIGHTS = {
-    "from_file": 0,
-    "fewest_urls": 4,
-    "less_visited": 3,
-    "oldest": 1,
-    "host_prefix": 2,
-    "random": 1
+    "from_file":    0,
+    "fewest_urls":  1,
+    "less_visited": 2,
+    "oldest":       5,
+    "host_prefix":  2,
+    "random":       1
 }
 
 #Scanner options

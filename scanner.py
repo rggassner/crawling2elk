@@ -179,3 +179,4 @@ if __name__ == "__main__":
     ip_list = generate_random_ips(ip_count,include_networks=SCAN_NETWORKS,exclude_networks=NOSCAN_NETWORKS)
     asyncio.run(scan_ips(ip_list, concurrency, args.verbose,db=db))
     print("Scan completed.")
+

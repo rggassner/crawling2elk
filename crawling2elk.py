@@ -1,6 +1,7 @@
 #!venv/bin/python3
 import os, re, time, hashlib, signal, random, argparse, urllib3, warnings, bs4.builder,string
 import numpy as np
+import requests
 from config import *
 if CATEGORIZE_NSFW:
     import opennsfw2 as n2
@@ -343,7 +344,7 @@ def content_type_download(args):
 def content_type_images(args):
     global model
     npixels=0
-    if CATEGORIZE_NSFW or SAVE_ALL_IMAGES:
+    if CATEGORIZE_NSFW or DOWNLOAD_ALL_IMAGES:
         try:
             img = Image.open(BytesIO(args['content']))
             width, height = img.size
@@ -358,30 +359,30 @@ def content_type_images(args):
             filename = hashlib.sha512(img.tobytes()).hexdigest() + ".png"
         except UnidentifiedImageError as e:
             #SVG using cairo in the future
-            db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+            db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_images',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
             return False
         except Image.DecompressionBombError as e:
-            db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+            db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_images',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
             return False
         except OSError:
-            db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+            db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_images',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
             return False
-        if SAVE_ALL_IMAGES:
+        if DOWNLOAD_ALL_IMAGES:
             img.save(IMAGES_FOLDER+'/' + filename, "PNG")
         if CATEGORIZE_NSFW and npixels > MIN_NSFW_RES :
             image = n2.preprocess_image(img, n2.Preprocessing.YAHOO)
             inputs = np.expand_dims(image, axis=0) 
             predictions = model.predict(inputs, verbose=0)
             sfw_probability, nsfw_probability = predictions[0]
-            db_insert_if_new_url(args['url'],content_type=args['content_type'],source='content_type_image_regex',visited=True,parent_host=args['parent_host'],isnsfw=nsfw_probability,isopendir=False,resolution=npixels, db=args['db'])
+            db_insert_if_new_url(args['url'],content_type=args['content_type'],source='content_type_images',visited=True,parent_host=args['parent_host'],isnsfw=nsfw_probability,isopendir=False,resolution=npixels, db=args['db'])
             if nsfw_probability>NSFW_MIN_PROBABILITY:
                 print('porn {} {}'.format(nsfw_probability,args['url']))
-                if SAVE_NSFW:
+                if DOWNLOAD_NSFW:
                     img.save(NSFW_FOLDER +'/'+ filename, "PNG")
             else:
-                if SAVE_SFW:
+                if DOWNLOAD_SFW:
                     img.save(SFW_FOLDER +'/' +filename, "PNG")
-    db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_image_regex',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+    db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_images',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
     return True
 
 @function_for_content_type(content_type_midi_regex)
@@ -411,30 +412,38 @@ def content_type_midis(args):
     return True
 
 @function_for_content_type(content_type_audio_regex)
-def content_type_audio(args):
+def content_type_audios(args):
     if DOWNLOAD_AUDIOS:
         url = args['url']
-        # Get the base filename from the URL path
-        base_filename = os.path.basename(urlparse(url).path)
-        # Compute SHA-256 hash of the URL
+        try:
+            # Decode percent-encoded filename to get original characters
+            decoded_name = unquote(os.path.basename(urlparse(url).path))
+        except Exception:
+            decoded_name = os.path.basename(urlparse(url).path)
+
+        # Remove characters that can cause problems and truncate if too long
+        safe_name = re.sub(r"[^\w\-.]", "_", decoded_name)
+        if len(safe_name) > 50:
+            safe_name = safe_name[:47] + "..."
+
         url_hash = hashlib.sha256(url.encode()).hexdigest()
-        # Prepend the hash to the filename
-        unique_filename = f"{url_hash}-{base_filename}"
-        # Save the file
+        unique_filename = f"{url_hash}-{safe_name}"
         filepath = os.path.join(AUDIOS_FOLDER, unique_filename)
+
         with open(filepath, "wb") as f:
             f.write(args['content'])
 
     db_insert_if_new_url(
         url=args['url'],
         content_type=args['content_type'],
-        source='content_type_audio_regex',
+        source='content_type_audios',
         isopendir=False,
         visited=True,
         parent_host=args['parent_host'],
         db=args['db']
     )
     return True
+
 
 @function_for_content_type(content_type_video_regex)
 def content_type_videos(args):
@@ -460,14 +469,14 @@ def content_type_videos(args):
 
     return True
 
-@function_for_content_type(content_type_pdf)
+@function_for_content_type(content_type_pdf_regex)
 def content_type_pdfs(args):
     db_insert_if_new_url(
         url=args['url'],
         content_type=args['content_type'],
         isopendir=False,
         visited=True,
-        source='content_type_pdf',
+        source='content_type_pdfs',
         parent_host=args['parent_host'],
         db=args['db']
     )
@@ -477,9 +486,61 @@ def content_type_pdfs(args):
 
     url = args['url']
     base_filename = os.path.basename(urlparse(url).path)
+
+    # Truncate long filenames (UTF-8 encoded) to avoid "filename too long" errors
+    try:
+        # Decode percent-encoded filename to get original characters
+        decoded_name = unquote(base_filename)
+    except Exception:
+        decoded_name = base_filename
+
+    # Truncate if longer than 50 chars and remove risky characters
+    safe_name = re.sub(r"[^\w\-.]", "_", decoded_name)  # Keep only safe chars
+    if len(safe_name) > 50:
+        safe_name = safe_name[:47] + "..."
+
     url_hash = hashlib.sha256(url.encode()).hexdigest()
-    unique_filename = f"{url_hash}-{base_filename}"
+    unique_filename = f"{url_hash}-{safe_name}"
     filepath = os.path.join(PDFS_FOLDER, unique_filename)
+
+    with open(filepath, "wb") as f:
+        f.write(args['content'])
+
+    return True
+
+@function_for_content_type(content_type_compressed_regex)
+def content_type_compresseds(args):
+    db_insert_if_new_url(
+        url=args['url'],
+        content_type=args['content_type'],
+        isopendir=False,
+        visited=True,
+        source='content_type_compresseds',
+        parent_host=args['parent_host'],
+        db=args['db']
+    )
+
+    if not DOWNLOAD_COMPRESSEDS:
+        return True
+
+    url = args['url']
+    base_filename = os.path.basename(urlparse(url).path)
+
+    # Truncate long filenames (UTF-8 encoded) to avoid "filename too long" errors
+    try:
+        # Decode percent-encoded filename to get original characters
+        decoded_name = unquote(base_filename)
+    except Exception:
+        decoded_name = base_filename
+
+    # Truncate if longer than 50 chars and remove risky characters
+    safe_name = re.sub(r"[^\w\-.]", "_", decoded_name)  # Keep only safe chars
+    if len(safe_name) > 50:
+        safe_name = safe_name[:47] + "..."
+
+    url_hash = hashlib.sha256(url.encode()).hexdigest()
+    unique_filename = f"{url_hash}-{safe_name}"
+    filepath = os.path.join(COMPRESSEDS_FOLDER, unique_filename)
 
     with open(filepath, "wb") as f:
         f.write(args['content'])
@@ -503,6 +564,7 @@ def sanitize_content_type(content_type):
     return content_type
 
 def get_page(url, driver, db):
+    original_url=url
     driver = read_web(url, driver)  # Fetch the page using Selenium
     parent_host = urlsplit(url)[1]  # Get the parent host from the URL
     if driver:
@@ -513,12 +575,21 @@ def get_page(url, driver, db):
                 if status_code in [301, 302, 303, 307, 308]:  # Redirection status codes
                     # Get the new URL from the Location header
                     db_insert_if_new_url(url=url,visited=True,isopendir=False,source='get_page.redirect',parent_host=parent_host,db=db)
-
                 # Continue with normal content processing 
                 if 'Content-Type' in request.response.headers:
                     url=request.url
                     host=urlsplit(url)[1]
-                    content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
+
+                    try: 
+                        content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
+                    except ValueError as e:  # 🛠️ Catch specific Brotli decompression failure
+                        if "BrotliDecompress failed" in str(e):
+                            print(f"[BROTLIDECOMPRESS ERROR] {url} - Brotli decompression failed")  
+                            db_insert_if_new_url(url=url,visited=True,source='BrotliDecompressFailed',parent_host=parent_host,db=db)
+                            continue
+                        else:
+                            print(f"!!!! This was not updated in the database, you need to deal with this error in the code function get_page [DECODE ERROR] {url} - {e} -")
+                            continue
                     content_type = request.response.headers['Content-Type']
                     content_type = sanitize_content_type(content_type)
                     host = urlsplit(url)[1]  # Extract host from the URL
@@ -540,6 +611,9 @@ def get_page(url, driver, db):
                             print(f"UNKNOWN type -{url}- -{content_type}-")
         #force update on main url
         db_insert_if_new_url(url=url,visited=True,source='get_page.end',parent_host=parent_host,db=db)
+    #force update on main url
+    db_insert_if_new_url(url=original_url,visited=True,source='get_page.end.original',parent_host=parent_host,db=db)
+
 
 def break_after(seconds=60):
     def timeout_handler(signum, frame):  # Custom signal handler
@@ -584,7 +658,7 @@ def initialize_driver():
     options = webdriver.ChromeOptions()
     options.add_argument(f'user-agent={user_agent}')
     prefs = {"download.default_directory": DIRECT_LINK_DOWNLOAD_FOLDER,}
-    if not CATEGORIZE_NSFW and not SAVE_ALL_IMAGES and not FORCE_IMAGE_LOAD:
+    if not CATEGORIZE_NSFW and not DOWNLOAD_ALL_IMAGES and not FORCE_IMAGE_LOAD:
         prefs["profile.managed_default_content_settings.images"] = 2  # disable images
     if BLOCK_CSS:
         prefs["profile.managed_default_content_settings.stylesheets"] = 2  # disable CSS
@@ -1063,7 +1137,106 @@ def db_create_database(initial_url, db):
         print("Error creating indices or inserting initial document:", e)
         return False
 
+def run_fast_extension_pass(db):
+    for extension, content_type_patterns in EXTENSION_MAP.items():
+        buckets = list(range(ELASTICSEARCH_RANDOM_BUCKETS))
+        random.shuffle(buckets)
+        for random_bucket in buckets:
+            print(f"[FAST CRAWLER] Extension: {extension} | Bucket: \033[33m{random_bucket}\033[0m")
 
+            query = {
+                "bool": {
+                    "must": [
+                        {"term": {"visited": False}},
+                        {"wildcard": {"url": f"*{extension}"}},
+                        {"term": {"random_bucket": random_bucket}}
+                    ]
+                }
+            }
+
+            try:
+                result = db.es.search(index=URLS_INDEX, query=query, size=10000)
+                urls = result.get("hits", {}).get("hits", [])
+
+                # Shuffle the URLs to avoid sequential hitting
+                random.shuffle(urls)
+
+                for hit in urls:
+                    url = hit["_source"]["url"]
+                    print(url)
+                    fast_extension_crawler(url, extension, content_type_patterns, db)
+
+            except Exception as e:
+                print(f"[FAST CRAWLER] Error retrieving URLs for extension {extension} in bucket {random_bucket}: {e}")
+
+
+def fast_extension_crawler(url, extension, content_type_patterns, db):
+    headers = {"User-Agent": UserAgent().random}
+    try:
+        head_resp = requests.head(url, timeout=(10, 10), allow_redirects=True, verify=False, headers=headers)
+    except Exception as e:
+        print(f"[FAST CRAWLER] Failed HEAD {url}: {e}")
+        return
+    
+    if not (200 <= head_resp.status_code < 300):
+        print(f"[FAST CRAWLER] Skipping {url} due to non-2xx HEAD status: {head_resp.status_code}")
+        return
+    
+    content_type = head_resp.headers.get("Content-Type", "").lower().split(";")[0].strip()
+    if not any(re.match(pattern, content_type) for pattern in content_type_patterns):
+        print(f"[FAST CRAWLER] Skipping {url}: mismatched content-type '{content_type}' for extension '{extension}'")
+        return
+
+    try:
+        host = urlparse(url).hostname or ""
+        if is_host_block_listed(host) or not is_host_allow_listed(host) or is_url_block_listed(url):
+            return
+
+        if HUNT_OPEN_DIRECTORIES:
+            insert_directory_tree(url, db)
+
+        # Try to find a matching function
+        found = False
+        for regex, function in content_type_functions:
+            if regex.search(content_type):
+                found = True
+
+                # If download is needed, fetch full content
+                needs_download = (
+                    (function.__name__ == "content_type_pdfs" and DOWNLOAD_PDFS) or
+                    (function.__name__ == "content_type_compresseds" and DOWNLOAD_COMPRESSEDS) or
+                    (function.__name__ == "content_type_audios" and DOWNLOAD_AUDIOS) or
+                    (function.__name__ == "content_type_images" and DOWNLOAD_NSFW) or 
+                    (function.__name__ == "content_type_images" and DOWNLOAD_SFW) or 
+                    (function.__name__ == "content_type_images" and DOWNLOAD_ALL_IMAGES) 
+                )
+
+                content = None
+                if needs_download:
+                    try:
+                        get_resp = requests.get(url, timeout=(10, 30), stream=True, allow_redirects=True, verify=False, headers=headers)
+                        content = get_resp.content
+                    except Exception as e:
+                        print(f"[FAST CRAWLER] Failed GET for {url}: {e}")
+                        return
+
+                function({
+                    'url': url,
+                    'visited': True,
+                    'content_type': content_type,
+                    'content': content,
+                    'source': 'fast_extension_crawler',
+                    'words': '',
+                    'parent_host': '',
+                    'db': db
+                })
+                break
+
+        if not found:
+            print(f"[FAST CRAWLER] UNKNOWN type -{url}- -{content_type}-")
+
+    except Exception as e:
+        print(f"[FAST CRAWLER] Error processing {url}: {e}")
 
 def main():
     global model
@@ -1080,15 +1253,35 @@ def main():
         nargs="?",
         help="The URL to insert (used with 'insert' command)"
     )
+    parser.add_argument(
+        "--fast_run",
+        action="store_true",
+        help="Run fast extension crawler only (skip full crawler)"
+    )
+
     args = parser.parse_args()
     db = DatabaseConnection()
+
     if args.command == "insert":
         if not args.url:
             print("Error: Please provide a URL to insert.")
         else:
-            db_insert_if_new_url(url=args.url, visited=False, source='manual', content_type='', words='', isnsfw='', resolution='', parent_host='', db=db)
+            db_insert_if_new_url(
+                url=args.url,
+                visited=False,
+                source='manual',
+                content_type='',
+                words='',
+                isnsfw='',
+                resolution='',
+                parent_host='',
+                db=db
+            )
     else:
-        crawler(db)
+        if args.fast_run:
+            run_fast_extension_pass(db)
+        else:
+            crawler(db)
 
     db.close()
 

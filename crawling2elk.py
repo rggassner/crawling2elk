@@ -24,6 +24,8 @@ from collections import Counter
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 warnings.filterwarnings("ignore", category=Warning, message=".*verify_certs=False is insecure.*")
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+import logging
+from elasticsearch import helpers
 
 url_functions = []
 content_type_functions = []
@@ -333,7 +335,7 @@ def content_type_download(args):
     return True
 
 @function_for_content_type(content_type_plain_text_regex)
-def content_type_download(args):
+def content_type_plain_text(args):
     words = ''
     if EXTRACT_WORDS:
         words = get_words(args['content'])
@@ -387,28 +389,41 @@ def content_type_images(args):
 
 @function_for_content_type(content_type_midi_regex)
 def content_type_midis(args):
-    if DOWNLOAD_MIDIS:
-        url = args['url']
-        # Extract the original filename from the URL path
-        base_filename = os.path.basename(urlparse(url).path)
-        # Generate SHA-256 hash of the URL
-        url_hash = hashlib.sha256(url.encode()).hexdigest()
-        # Prepend hash to filename
-        unique_filename = f"{url_hash}-{base_filename}"
-        # Write to file
-        filepath = os.path.join(MIDIS_FOLDER, unique_filename)
-        with open(filepath, "wb") as f:
-            f.write(args['content'])
-
     db_insert_if_new_url(
         url=args['url'],
         content_type=args['content_type'],
-        source='content_type_midi_regex',
         isopendir=False,
         visited=True,
+        source='content_type_midis',
         parent_host=args['parent_host'],
         db=args['db']
     )
+
+    if not DOWNLOAD_MIDIS:
+        return True
+
+    url = args['url']
+    base_filename = os.path.basename(urlparse(url).path)
+
+    # Truncate long filenames (UTF-8 encoded) to avoid "filename too long" errors
+    try:
+        # Decode percent-encoded filename to get original characters
+        decoded_name = unquote(base_filename)
+    except Exception:
+        decoded_name = base_filename
+
+    # Truncate if longer than 50 chars and remove risky characters
+    safe_name = re.sub(r"[^\w\-.]", "_", decoded_name)  # Keep only safe chars
+    if len(safe_name) > 50:
+        safe_name = safe_name[:47] + "..."
+
+    url_hash = hashlib.sha256(url.encode()).hexdigest()
+    unique_filename = f"{url_hash}-{safe_name}"
+    filepath = os.path.join(MIDIS_FOLDER, unique_filename)
+
+    with open(filepath, "wb") as f:
+        f.write(args['content'])
+
     return True
 
 @function_for_content_type(content_type_audio_regex)
@@ -444,28 +459,42 @@ def content_type_audios(args):
     )
     return True
 
-
 @function_for_content_type(content_type_video_regex)
 def content_type_videos(args):
-    if DOWNLOAD_VIDEOS:
-        url = args['url']
-        base_filename = os.path.basename(urlparse(url).path)
-        url_hash = hashlib.sha256(url.encode()).hexdigest()
-        unique_filename = f"{url_hash}-{base_filename}"
-        filepath = os.path.join(VIDEOS_FOLDER, unique_filename)
-
-        with open(filepath, "wb") as f:
-            f.write(args['content'])
-
     db_insert_if_new_url(
         url=args['url'],
         content_type=args['content_type'],
-        source='content_type_video_regex',
         isopendir=False,
         visited=True,
+        source='content_type_videos',
         parent_host=args['parent_host'],
         db=args['db']
     )
+
+    if not DOWNLOAD_VIDEOS:
+        return True
+
+    url = args['url']
+    base_filename = os.path.basename(urlparse(url).path)
+
+    # Truncate long filenames (UTF-8 encoded) to avoid "filename too long" errors
+    try:
+        # Decode percent-encoded filename to get original characters
+        decoded_name = unquote(base_filename)
+    except Exception:
+        decoded_name = base_filename
+
+    # Truncate if longer than 50 chars and remove risky characters
+    safe_name = re.sub(r"[^\w\-.]", "_", decoded_name)  # Keep only safe chars
+    if len(safe_name) > 50:
+        safe_name = safe_name[:47] + "..."
+
+    url_hash = hashlib.sha256(url.encode()).hexdigest()
+    unique_filename = f"{url_hash}-{safe_name}"
+    filepath = os.path.join(VIDEOS_FOLDER, unique_filename)
+
+    with open(filepath, "wb") as f:
+        f.write(args['content'])
 
     return True
 
@@ -720,12 +749,12 @@ def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
     # Default weights if none provided
     if METHOD_WEIGHTS is None:
         method_weights = {
-            "from_file": 0.0,
-            "fewest_urls": 0.1,
-            "less_visited": 0.2,
-            "oldest": 0.2,
-            "host_prefix": 0.2,
-            "random": 0.2
+            "from_file":    0,
+            "fewest_urls":  1,
+            "less_visited": 2,
+            "oldest":       2,
+            "host_prefix":  2,
+            "random":       1
         }
     else:
         method_weights=METHOD_WEIGHTS
@@ -938,6 +967,7 @@ def get_oldest_unvisited_urls_from_bucket(db, size=100):
     """Get the oldest unvisited URLs from a random bucket using created_at timestamp."""
     for attempt in range(MAX_ES_RETRIES):
         random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
+        print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
 
         query_body = {
             "size": size,
@@ -965,6 +995,8 @@ def get_oldest_unvisited_urls_from_bucket(db, size=100):
         response = db.con.search(index=URLS_INDEX, body=query_body)
         hits = response.get('hits', {}).get('hits', [])
         if hits:
+            for hit in hits:
+                print(f'    Selected bucket: \033[33m{hit["_source"]["url"]}\033[0m')
             random.shuffle(hits)  # Shuffle the list in-place
             return [{
                 "url": hit["_source"]["url"],
@@ -1206,6 +1238,7 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
                     (function.__name__ == "content_type_pdfs" and DOWNLOAD_PDFS) or
                     (function.__name__ == "content_type_compresseds" and DOWNLOAD_COMPRESSEDS) or
                     (function.__name__ == "content_type_audios" and DOWNLOAD_AUDIOS) or
+                    (function.__name__ == "content_type_midis" and DOWNLOAD_MIDIS) or
                     (function.__name__ == "content_type_images" and DOWNLOAD_NSFW) or 
                     (function.__name__ == "content_type_images" and DOWNLOAD_SFW) or 
                     (function.__name__ == "content_type_images" and DOWNLOAD_ALL_IMAGES) 
@@ -1238,20 +1271,38 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
     except Exception as e:
         print(f"[FAST CRAWLER] Error processing {url}: {e}")
 
+
+
+def remove_blocked_hosts_from_es_db(db):
+
+    compiled_blocklist = [re.compile(pattern) for pattern in host_regex_block_list]
+
+    def is_blocked(host):
+        return any(regex.search(host) for regex in compiled_blocklist)
+
+    deleted = 0
+    query = {"query": {"match_all": {}}}
+
+    for doc in helpers.scan(db.es, index=URLS_INDEX, query=query):
+        url = doc['_source'].get('url')
+        if not url:
+            continue
+        host = urlsplit(url).hostname or ''
+        if is_blocked(host):
+            db.es.delete(index=URLS_INDEX, id=doc['_id'])
+            print(f"🧹 Deleted: {url}")
+            deleted += 1
+    print(f"\n✅ Done. Total deleted: {deleted}")
+
 def main():
     global model
-    parser = argparse.ArgumentParser(description="URL scanner and inserter.")
+    parser = argparse.ArgumentParser(description="URL scanner.")
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["insert", "run"],
+        choices=["run","fast_run"],
         default="run",
         help="Choose 'insert' to insert a URL or 'run' to execute the crawler"
-    )
-    parser.add_argument(
-        "url",
-        nargs="?",
-        help="The URL to insert (used with 'insert' command)"
     )
     parser.add_argument(
         "--fast_run",
@@ -1261,27 +1312,11 @@ def main():
 
     args = parser.parse_args()
     db = DatabaseConnection()
-
-    if args.command == "insert":
-        if not args.url:
-            print("Error: Please provide a URL to insert.")
-        else:
-            db_insert_if_new_url(
-                url=args.url,
-                visited=False,
-                source='manual',
-                content_type='',
-                words='',
-                isnsfw='',
-                resolution='',
-                parent_host='',
-                db=db
-            )
+    remove_blocked_hosts_from_es_db(db)
+    if args.fast_run:
+        run_fast_extension_pass(db)
     else:
-        if args.fast_run:
-            run_fast_extension_pass(db)
-        else:
-            crawler(db)
+        crawler(db)
 
     db.close()
 

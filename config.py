@@ -38,7 +38,7 @@ VIDEOS_FOLDER='videos'
 DOWNLOAD_ALL_IMAGES=False
 IMAGES_FOLDER='images'
 
-DOWNLOAD_COMPRESSEDS=True
+DOWNLOAD_COMPRESSEDS=False
 COMPRESSEDS_FOLDER='compressed'
 
 #NonSafeForWork parameters
@@ -63,7 +63,7 @@ HTTPS_EMBED='https://localhost:'+EMBED_PORT+'/embed.html?url='
 ELASTICSEARCH_HOST="127.0.0.1"
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_USER='elastic'
-ELASTICSEARCH_PASSWORD='yourpasswordhere'
+ELASTICSEARCH_PASSWORD='yourpassword'
 ELASTICSEARCH_CA_CERT_PATH=None
 ELASTICSEARCH_RANDOM_BUCKETS=7
 MAX_ES_RETRIES=10
@@ -115,9 +115,9 @@ host_regex_allow_list = [r'.*']
 METHOD_WEIGHTS = {
     "from_file":    0,
     "fewest_urls":  1,
-    "less_visited": 2,
-    "oldest":       5,
-    "host_prefix":  2,
+    "less_visited": 1,
+    "oldest":       1,
+    "host_prefix":  1,
     "random":       1
 }
 
@@ -140,3 +140,4 @@ NOSCAN_NETWORKS = [
     "100.64.0.0/10",
     "169.254.0.0/16"
 ]
+

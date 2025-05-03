@@ -1,13 +1,14 @@
 #!venv/bin/python3
 import os, re, time, hashlib, signal, random, argparse, urllib3, warnings, bs4.builder,string
 import numpy as np
-import requests
+import requests, subprocess
 from config import *
 if CATEGORIZE_NSFW:
     import opennsfw2 as n2
     model = n2.make_open_nsfw_model()
 from functions import *
 from bs4 import BeautifulSoup
+from bs4 import MarkupResemblesLocatorWarning
 from urllib.parse import urlsplit
 from seleniumwire import webdriver
 from fake_useragent import UserAgent
@@ -23,12 +24,18 @@ from urllib3.exceptions import InsecureRequestWarning
 from collections import Counter
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 warnings.filterwarnings("ignore", category=Warning, message=".*verify_certs=False is insecure.*")
+warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import logging
 from elasticsearch import helpers
+from tornado import httpserver, ioloop, web
+import fcntl
 
 url_functions = []
 content_type_functions = []
+LOCK_FILE = "/tmp/my_crawler_instance.lock"
+lock_file = None  # Global reference to prevent garbage collection
+
 
 ##used to generate wordlist
 soup_tag_blocklist = [
@@ -310,8 +317,10 @@ def content_type_download(args):
         soup = BeautifulSoup(content, "html.parser")
     except UnboundLocalError as e:
         print(e)
+        db_insert_if_new_url(url=args['url'],content_type=args['content_type'],isopendir=False,visited=True,words='',min_webcontent='',raw_webcontent='',source='content_type_html_regex.exception',parent_host=args['parent_host'],db=args['db'])
         return False
     except bs4.builder.ParserRejectedMarkup as e:
+        db_insert_if_new_url(url=args['url'],content_type=args['content_type'],isopendir=False,visited=True,words='',min_webcontent='',raw_webcontent='',source='content_type_html_regex.exception',parent_host=args['parent_host'],db=args['db'])
         print(e)
         return False
 
@@ -328,9 +337,7 @@ def content_type_download(args):
     if EXTRACT_MIN_WEBCONTENT:
         min_webcontent=get_min_webcontent(soup)[:MAX_WEBCONTENT_SIZE]
 
-    #This is the original position
     isopendir = is_open_directory(str(soup), args['url'])
-
     db_insert_if_new_url(url=args['url'],content_type=args['content_type'],isopendir=isopendir,visited=True,words=words,min_webcontent=min_webcontent,raw_webcontent=raw_webcontent,source='content_type_html_regex',parent_host=args['parent_host'],db=args['db'])
     return True
 
@@ -613,11 +620,16 @@ def get_page(url, driver, db):
                         content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
                     except ValueError as e:  # 🛠️ Catch specific Brotli decompression failure
                         if "BrotliDecompress failed" in str(e):
-                            print(f"[BROTLIDECOMPRESS ERROR] {url} - Brotli decompression failed")  
                             db_insert_if_new_url(url=url,visited=True,source='BrotliDecompressFailed',parent_host=parent_host,db=db)
                             continue
+                        elif "LookupError when decoding" in str(e):
+                            db_insert_if_new_url(url=url,visited=True,source='lookuperror',parent_host=parent_host,db=db)
+                            continue
+                        elif "EOFError when decoding" in str(e):
+                            db_insert_if_new_url(url=url,visited=True,source='lookuperror',parent_host=parent_host,db=db)
+                            continue
                         else:
-                            print(f"!!!! This was not updated in the database, you need to deal with this error in the code function get_page [DECODE ERROR] {url} - {e} -")
+                            print(f"\033[91m🚨 !!!! This was not updated in the database, you need to deal with this error in the code function get_page [DECODE ERROR] {url} - {e} -\033[0m")
                             continue
                     content_type = request.response.headers['Content-Type']
                     content_type = sanitize_content_type(content_type)
@@ -1114,14 +1126,7 @@ def get_random_host_domains(db, size=100):
 
 def db_create_database(initial_url, db):
     print("Creating Elasticsearch index structure.")
-    #try:
-    #    host = urlsplit(initial_url)[1]
-    #except ValueError:
-    #    print("Invalid initial URL:", initial_url)
-    #    return False
-
     now_iso = datetime.now(timezone.utc).isoformat()
-
     # Define mappings for the URLS_INDEX
     urls_mapping = {
         "mappings": {
@@ -1170,7 +1175,9 @@ def db_create_database(initial_url, db):
         return False
 
 def run_fast_extension_pass(db):
-    for extension, content_type_patterns in EXTENSION_MAP.items():
+    shuffled_extensions = list(EXTENSION_MAP.items())
+    random.shuffle(shuffled_extensions)
+    for extension, content_type_patterns in shuffled_extensions:
         buckets = list(range(ELASTICSEARCH_RANDOM_BUCKETS))
         random.shuffle(buckets)
         for random_bucket in buckets:
@@ -1195,7 +1202,6 @@ def run_fast_extension_pass(db):
 
                 for hit in urls:
                     url = hit["_source"]["url"]
-                    print(url)
                     fast_extension_crawler(url, extension, content_type_patterns, db)
 
             except Exception as e:
@@ -1207,16 +1213,16 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
     try:
         head_resp = requests.head(url, timeout=(10, 10), allow_redirects=True, verify=False, headers=headers)
     except Exception as e:
-        print(f"[FAST CRAWLER] Failed HEAD {url}: {e}")
+        db_insert_if_new_url(url=url,visited=True,words='',min_webcontent='',raw_webcontent='',source='fast_extension_crawler.head.exception',db=db)
         return
     
     if not (200 <= head_resp.status_code < 300):
-        print(f"[FAST CRAWLER] Skipping {url} due to non-2xx HEAD status: {head_resp.status_code}")
+        #print(f"[FAST CRAWLER] Skipping {url} due to non-2xx HEAD status: {head_resp.status_code}")
         return
     
     content_type = head_resp.headers.get("Content-Type", "").lower().split(";")[0].strip()
     if not any(re.match(pattern, content_type) for pattern in content_type_patterns):
-        print(f"[FAST CRAWLER] Skipping {url}: mismatched content-type '{content_type}' for extension '{extension}'")
+        #print(f"[FAST CRAWLER] Skipping {url}: mismatched content-type '{content_type}' for extension '{extension}'")
         return
 
     try:
@@ -1272,6 +1278,24 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
         print(f"[FAST CRAWLER] Error processing {url}: {e}")
 
 
+def remove_urls_with_spaces(db):
+    """
+    Deletes documents from Elasticsearch where the 'url' field contains spaces.
+    """
+    deleted = 0
+    query = {"query": {"match_all": {}}}
+
+    for doc in helpers.scan(db.es, index=URLS_INDEX, query=query):
+        url = doc['_source'].get('url')
+        if not url:
+            continue
+        if " " in url:
+            db.es.delete(index=URLS_INDEX, id=doc['_id'])
+            print(f"🧹 Deleted URL with space: {url}")
+            deleted += 1
+
+    print(f"\n✅ Done. Total URLs deleted due to spaces: {deleted}")
+
 
 def remove_blocked_hosts_from_es_db(db):
 
@@ -1294,30 +1318,81 @@ def remove_blocked_hosts_from_es_db(db):
             deleted += 1
     print(f"\n✅ Done. Total deleted: {deleted}")
 
+def make_https_app():
+    return web.Application([
+        (r"/(.*)", web.StaticFileHandler, {
+            "path": os.getcwd(),
+            "default_filename": "index.html"
+        })
+    ], debug=False)
+
+def start_https_server():
+    # Generate self-signed cert (only if not exists)
+    if not (os.path.exists("cert.pem") and os.path.exists("key.pem")):
+        os.system("openssl req -nodes -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -subj '/CN=mylocalhost'")
+
+    app = make_https_app()
+    server = httpserver.HTTPServer(app, ssl_options={
+        "certfile": "cert.pem",
+        "keyfile": "key.pem",
+    })
+    server.listen(EMBED_PORT)
+    print(f"Serving HTTPS at https://localhost:{EMBED_PORT}")
+
+    # Run the server in the background using Tornado's IOLoop
+    ioloop.IOLoop.current().spawn_callback(lambda: None)  # ensure IOLoop starts
+    ioloop.IOLoop.current().start()
+
+
+def get_instance_number():
+    """
+    Uses file locking to detect which instance this is.
+    Returns 1 for the first, 2 for the second, 3+ for others.
+    Keeps the lock file open to avoid lock release.
+    """
+    global lock_file
+    try:
+        os.makedirs("/tmp/instance_flags", exist_ok=True)
+        for i in range(1, 100):
+            lock_path = f"/tmp/instance_flags/instance_{i}.lock"
+            lock_file = open(lock_path, "w")  # keep open!
+            try:
+                fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return i
+            except BlockingIOError:
+                lock_file.close()
+                continue
+    except Exception as e:
+        print(f"Error determining instance number: {e}")
+    return 999
+
 def main():
-    global model
-    parser = argparse.ArgumentParser(description="URL scanner.")
-    parser.add_argument(
-        "command",
-        nargs="?",
-        choices=["run","fast_run"],
-        default="run",
-        help="Choose 'insert' to insert a URL or 'run' to execute the crawler"
-    )
-    parser.add_argument(
-        "--fast_run",
-        action="store_true",
-        help="Run fast extension crawler only (skip full crawler)"
-    )
-
-    args = parser.parse_args()
+    instance = get_instance_number()
     db = DatabaseConnection()
-    remove_blocked_hosts_from_es_db(db)
-    if args.fast_run:
-        run_fast_extension_pass(db)
-    else:
+    if instance == 1:
+        print("Instance 1: Running HTTPS webserver to embed http site for compatibility with selenium-wire.")
+        # Run HTTPS in a background thread to avoid blocking the crawler
+        import threading
+        threading.Thread(target=start_https_server, daemon=True).start()
+        time.sleep(1)  # Give HTTPS server a head start
+        print("Instance 1: And now some housekeeping. Removing urls from hosts that are blocklisted and should be removed.")
+        remove_blocked_hosts_from_es_db(db)
+        print("Instance 1: Deleting urls with white spaces.")
+        remove_urls_with_spaces(db)
+        print("Instance 1: Let's go full crawler mode.")
         crawler(db)
-
+    elif instance == 2:
+        print("Instance 2: Running fast extension pass only. Not everything needs selenium... running requests in urls that looks like files.")
+        run_fast_extension_pass(db)
+    elif instance == 3:
+        print("Instance 3: Scanning IPs in some unconventional ports and protocols combinations.")
+        try:
+            subprocess.run(["venv/bin/python3", "scanner.py"], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error while running scanner.py: {e}")
+    else:
+        print(f"Instance {instance}: Running full crawler.")
+        crawler(db)
     db.close()
 
 if __name__ == "__main__":

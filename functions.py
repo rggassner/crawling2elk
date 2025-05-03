@@ -1,6 +1,6 @@
 import random, hashlib, time, re, string, json
 from config import *
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 from datetime import datetime, timezone
 from elasticsearch import NotFoundError, RequestError
 from elasticsearch import Elasticsearch
@@ -9,66 +9,75 @@ from elasticsearch.exceptions import NotFoundError, RequestError
 def sanitize_url(url):
     url = url.strip()
     url = url.rstrip()
+
+    # Remove strange quotes
     url = re.sub(r'^“(.*)"', r"\1", url)
-    url = re.sub(r"^”(.*)”$", r"\1", url)
-    url = re.sub(r"^“(.*)“$", r"\1", url)
+    url = re.sub(r'^”(.*)”$', r"\1", url)
+    url = re.sub(r'^“(.*)“$', r"\1", url)
     url = re.sub(r'^"(.*)"$', r"\1", url)
-    url = re.sub(r"^“(.*)”$", r"\1", url)
-    url = re.sub(r"^‘(.*)’$", r"\1", url)
+    url = re.sub(r'^“(.*)”$', r"\1", url)
+    url = re.sub(r'^‘(.*)’$', r"\1", url)
     url = re.sub(r'^"(.*)\'$', r"\1", url)
-    url = re.sub(r"^\'(.*)\'$", r"\1", url)
+    url = re.sub(r"^'(.*)'$", r"\1", url)
     url = re.sub(r'^”(.*)″$', r"\1", url)
-    url = re.sub(r"^(.+)#.*$", r"\1", url)
-    url = re.sub("^www.", "http://www.", url)
-    if re.search(r"^http:[^/][^/]", url):
-        url = re.sub("^http:", "http://", url)
-    if re.search(r"^http:/[^/]", url):
-        url = re.sub("^http:/", "http://", url)
-    if re.search(r"^https:[^/][^/]", url):
-        url = re.sub("^https:", "https://", url)
-    if re.search(r"^https:/[^/]", url):
-        url = re.sub("^https:/", "https://", url)
-    url = re.sub("^ps://", "https://", url)
-    url = re.sub("^ttps://", "https://", url)
-    url = re.sub("^[a-zA-Z.“(´]https://", "https://", url)
-    url = re.sub("^[a-zA-Z.“(´]http://", "http://", url)
-    url = re.sub("^https[a-zA-Z.“(´]://", "https://", url)
-    url = re.sub("^http[.“(´]://", "http://", url)
-    url = re.sub("^htto://", "http://", url)
-    url = re.sub("^https: / /", "https://", url)
-    url = re.sub("^://", "https://", url)
-    url = re.sub("^htt://", "http://", url)
-    url = re.sub("^Mh ttp://", "http://", url)
-    url = re.sub("^htpps://", "https://", url)
-    url = re.sub("^httpp://", "https://", url)
-    url = re.sub("^http:s//", "https://", url)
-    url = re.sub("^hthttps://", "https://", url)
-    url = re.sub("^httsp://", "https://", url)
-    url = re.sub("^htts://", "https://", url)
-    url = re.sub("^htp://http//", "http://", url)
-    url = re.sub("^htp://", "http://", url)
-    url = re.sub("^htttps://", "https://", url)
-    url = re.sub("^https:https://", "https://", url)
-    url = re.sub("^hhttp://", "http://", url)
-    url = re.sub("^http:/http://", "http://", url)
-    url = re.sub("^https https://", "https://", url)
-    url = re.sub("^httpshttps://", "https://", url)
-    url = re.sub("^https://https://", "https://", url)
-    url = re.sub('^"https://', "https://", url)
-    url = re.sub("^http:www", "http://www", url)
-    url = re.sub("^httpd://", "https://", url)
-    url = re.sub("^htps://", "https://", url)
-    url = re.sub("^https: //", "https://", url)
-    url = re.sub("^http2://", "https://", url)
-    url = re.sub("^https : //", "https://", url)
-    url = re.sub("^htttp://", "http://", url)
-    url = re.sub("^ttp://", "http://", url)
-    url = re.sub("^https%3A//", "https://", url)
-    url = re.sub("^%20https://", "https://", url)
-    url = re.sub("^%20http://", "http://", url)
-    url = re.sub("^%22mailto:", "mailto:", url)
-    url = re.sub("^httpqs://", "https://www.", url)
-    return url
+
+    # Remove fragment
+    url = re.sub(r'^(.+)#.*$', r"\1", url)
+
+    # Common typo fixups
+    url = re.sub(r"^www\.", "http://www.", url)
+    url = re.sub(r"^ps://", "https://", url)
+    url = re.sub(r"^ttps://", "https://", url)
+    url = re.sub(r"^htto://", "http://", url)
+    url = re.sub(r"^htt://", "http://", url)
+    url = re.sub(r"^htpps://", "https://", url)
+    url = re.sub(r"^httpp://", "https://", url)
+    url = re.sub(r"^http:s//", "https://", url)
+    url = re.sub(r"^hthttps://", "https://", url)
+    url = re.sub(r"^httsp://", "https://", url)
+    url = re.sub(r"^htts://", "https://", url)
+    url = re.sub(r"^htp://http//", "http://", url)
+    url = re.sub(r"^htp://", "http://", url)
+    url = re.sub(r"^htttps://", "https://", url)
+    url = re.sub(r"^https:https://", "https://", url)
+    url = re.sub(r"^hhttp://", "http://", url)
+    url = re.sub(r"^http:/http://", "http://", url)
+    url = re.sub(r"^https https://", "https://", url)
+    url = re.sub(r"^httpshttps://", "https://", url)
+    url = re.sub(r"^https://https://", "https://", url)
+    url = re.sub(r'^"https://', "https://", url)
+    url = re.sub(r"^http:www", "http://www", url)
+    url = re.sub(r"^httpd://", "https://", url)
+    url = re.sub(r"^htps://", "https://", url)
+    url = re.sub(r"^https: //", "https://", url)
+    url = re.sub(r"^https : //", "https://", url)
+    url = re.sub(r"^http2://", "https://", url)
+    url = re.sub(r"^htttp://", "http://", url)
+    url = re.sub(r"^ttp://", "http://", url)
+    url = re.sub(r"^https%3A//", "https://", url)
+    url = re.sub(r"^%20https://", "https://", url)
+    url = re.sub(r"^%20http://", "http://", url)
+    url = re.sub(r"^%22mailto:", "mailto:", url)
+    url = re.sub(r"^httpqs://", "https://www.", url)
+    url = re.sub(r"^[a-zA-Z.“(´]https://", "https://", url)
+    url = re.sub(r"^[a-zA-Z.“(´]http://", "http://", url)
+    url = re.sub(r"^https[a-zA-Z.“(´]://", "https://", url)
+    url = re.sub(r"^http[.“(´]://", "http://", url)
+    url = re.sub(r"^://", "https://", url)
+
+    # Replace internal spaces with %20
+    url = url.replace(" ", "%20")
+
+    # Lowercase scheme and host only
+    try:
+        parts = urlsplit(url)
+        scheme = parts.scheme.lower()
+        netloc = parts.netloc.lower()
+        url = urlunsplit((scheme, netloc, parts.path, parts.query, parts.fragment))
+    except Exception:
+        pass  # In case urlsplit fails (bad input), skip
+
+    return url.strip()
 
 
 class DatabaseConnection:
@@ -314,6 +323,7 @@ content_type_audio_regex=[
         r"^audio/mp4$",
         r"^audio/wav$",
         r"^audio/MP2T$",
+        r"^audio/flac$",
         r"^audio/mpeg$",
         r"^audio/opus$",
         r"^audio/x-rpm$",
@@ -409,6 +419,7 @@ content_type_video_regex = [
         r"^video/x-ms-wmv$",
         r"^video/x-ms-asf$",
         r"^video/x-msvideo$",
+        r"^video/x-matroska$",
         r"^video/vnd\.dlna\.mpeg-tts$",
         r"^application/avi$",
         ]
@@ -417,6 +428,7 @@ content_type_plain_text_regex = [
         r"^\.js$",
         r"^text/js$",
         r"^text/xml$",
+        r"^text/srt$",
         r"^text/rtf$",
         r"^text/csv$",
         r"^text/vtt$",
@@ -450,6 +462,7 @@ content_type_plain_text_regex = [
         r"^application/stream\+json$",
         r"^application/problem\+json$",
         r"^text/0\.4/hammer\.min\.js$",
+        r"^text/x-handlebars-template$",
         r"^application/vnd\.api\+json$",
         r"^application/x-thrift\+json$",
         r"^application/json\+protobuf$",
@@ -559,6 +572,7 @@ content_type_all_others_regex = [
         r"^-$",
         r"^\*$",
         r"^None$",
+        r"^json$",
         r"^null$",
         r"^file$",
         r"^woff$",
@@ -569,13 +583,17 @@ content_type_all_others_regex = [
         r"^font/otf$",
         r"^font/woff$",
         r"^font/woff2$",
+        r"^\(null\)/woff2$",
         r"^font/truetype$",
         r"^x-font/ttf$",
+        r"^font/sfnt$",
         r"^font/x-woff$",
         r"^x-font/woff$",
         r"^font/x-woff2$",
         r"^font/opentype$",
         r"^text/css$",
+        r"^text/x-unknown-content-type$",
+        r"^text/plaincharset:",
         r"^text/javascript$",
         r"^application/\*$",
         r"^application/xml$",
@@ -603,17 +621,24 @@ content_type_all_others_regex = [
         r"^application/x-twb$",
         r"^application/x-msi$",
         r"^application/x-xar$",
+        r"^application/x-ruby$",
+        r"^application/x-frpc$",
         r"^application/x-tgif$",
         r"^application/x-perl$",
         r"^application/binary$",
         r"^application/msword$",
         r"^application/msword$",
+        r"^application/x-doom$",
         r"^application/x-woff$",
         r"^application/msexcel$",
+        r"^application/x-woff2$",
         r"^application/unknown$",
         r"^application/xml-dtd$",
+        r"^application/x-ndjson$",
+        r"^application/x-adrift$",
         r"^application/x-binary$",
         r"^application/rdf\+xml$",
+        r"^application/hr\+json$",
         r"^application/font-otf$",
         r"^application/download$",
         r"^application/rss\+xml$",
@@ -645,6 +670,7 @@ content_type_all_others_regex = [
         r"^application/pkcs7-mime$",
         r"^application/font-woff2$",
         r"^application/javascript$",
+        r"^-application/x-ndjson-$",
         r"^application/oct-stream$",
         r"^application/vnd\.yt-ump$",
         r"^application/octetstream$",
@@ -662,6 +688,7 @@ content_type_all_others_regex = [
         r"^application/x-executable$",
         r"^application/x-base64-frpc$",
         r"^application/pgp-signature$",
+        r"^application/x-ms-manifest$",
         r"^application/grpc-web-text$",
         r"^application/vnd\.ms-excel$",
         r"^application/force-download$",
@@ -672,10 +699,12 @@ content_type_all_others_regex = [
         r"^application/x-font-truetype$",
         r"^application/x-font-opentype$",
         r"^application/x-iso9660-image$",
+        r"^application/vnd\.siren\+json$",
         r"^application/x-ms-application$",
         r"^application/vnd\.ms-opentype$",
         r"^application/x-debian-package$",
         r"^application/x-httpd-ea-php54$",
+        r"^application/x-shared-scripts$",
         r"^application/x-java-jnlp-file$",
         r"^application/x-httpd-ea-php71$",
         r"^application/x-shockwave-flash$",
@@ -683,6 +712,7 @@ content_type_all_others_regex = [
         r"^application/x-apple-diskimage$",
         r"^application/x-chrome-extension$",
         r"^application/x-mobipocket-ebook$",
+        r"^application/vnd\.1cbn\.v1+json$",
         r"^application/vnd\.ms-fontobject$",
         r"^application/privatetempstorage$",
         r"^application/vnd\.ms-powerpoint$",
@@ -691,6 +721,8 @@ content_type_all_others_regex = [
         r"^application/x-ms-dos-executable$",
         r"^application/vnd\.apple\.mpegurl$",
         r"^application/x-pkcs7-certificates$",
+        r"^application/vnd\.imgur\.v1\+json$",
+        r"^application/x-www-form-urlencoded$",
         r"^application/x-typekit-augmentation$",
         r"^application/x-unknown-content-type$",
         r"^application/x-research-info-systems$",

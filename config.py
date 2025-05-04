@@ -8,8 +8,12 @@ SELENIUM_WIDTH=1920
 SELENIUM_HEIGHT=1080
 USE_PROXY=False
 PROXY_HOST='http://10.20.10.19:8123'
+#When the url is for a document, where will it be stored
+#This configuration does not affect the other download configuration
+#below
 DIRECT_LINK_DOWNLOAD_FOLDER='/dev/null'
 BLOCK_CSS=False
+#This makes selenium a bit faster if enabled but might make it detectable
 PERFORMANCE_OPTIMIZED=False
 FORCE_IMAGE_LOAD=False
 
@@ -60,6 +64,8 @@ HUNT_OPEN_DIRECTORIES=True
 EMBED_PORT="4443"
 HTTPS_EMBED='https://localhost:'+EMBED_PORT+'/embed.html?url='
 
+MAX_FAST_WORKERS=10
+
 ELASTICSEARCH_HOST="127.0.0.1"
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_USER='elastic'
@@ -101,6 +107,23 @@ BE_GREEDY=False
 # host_regex_block_list do not crawl these domains. 
 host_regex_block_list = [
     r'localhost:4443$',
+    r'(^|\.)google$',
+    r'(^|\.)google\.com$',
+    r'(^|\.)gstatic\.com$',
+    r'(^|\.)google\.dev$',
+    r'(^|\.)youtube\.com$',
+    r'(^|\.)archive\.org$',
+    r'(^|\.)booking\.com$',
+    r'(^|\.)adthrive\.com$',
+    r'(^|\.)google\.com\.br$',
+    r'(^|\.)googleapis\.com$',
+    r'(^|\.)doubleclick\.net$',
+    r'(^|\.)rubiconproject\.com$',
+    r'(^|\.)amazon-adsystem\.com$',
+    r'(^|\.)google-analytics\.com$',
+    r'(^|\.)googletagmanager\.com$',
+    r'(^|\.)googleadservices\.com$',
+    r'(^|\.)syndicatedsearch\.goog$',
     r'(^|\.)googlesyndication\.com$',
 ]
 
@@ -140,4 +163,3 @@ NOSCAN_NETWORKS = [
     "100.64.0.0/10",
     "169.254.0.0/16"
 ]
-

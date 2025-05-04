@@ -28,8 +28,14 @@ warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import logging
 from elasticsearch import helpers
+from elasticsearch import ConflictError
+
 from tornado import httpserver, ioloop, web
 import fcntl
+
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 
 url_functions = []
 content_type_functions = []
@@ -626,7 +632,10 @@ def get_page(url, driver, db):
                             db_insert_if_new_url(url=url,visited=True,source='lookuperror',parent_host=parent_host,db=db)
                             continue
                         elif "EOFError when decoding" in str(e):
-                            db_insert_if_new_url(url=url,visited=True,source='lookuperror',parent_host=parent_host,db=db)
+                            db_insert_if_new_url(url=url,visited=True,source='EOFERROR',parent_host=parent_host,db=db)
+                            continue
+                        elif "BadGzipFile when decoding" in str(e):
+                            db_insert_if_new_url(url=url,visited=True,source='BadGzipFile',parent_host=parent_host,db=db)
                             continue
                         else:
                             print(f"\033[91m🚨 !!!! This was not updated in the database, you need to deal with this error in the code function get_page [DECODE ERROR] {url} - {e} -\033[0m")
@@ -1174,55 +1183,21 @@ def db_create_database(initial_url, db):
         print("Error creating indices or inserting initial document:", e)
         return False
 
-def run_fast_extension_pass(db):
-    shuffled_extensions = list(EXTENSION_MAP.items())
-    random.shuffle(shuffled_extensions)
-    for extension, content_type_patterns in shuffled_extensions:
-        buckets = list(range(ELASTICSEARCH_RANDOM_BUCKETS))
-        random.shuffle(buckets)
-        for random_bucket in buckets:
-            print(f"[FAST CRAWLER] Extension: {extension} | Bucket: \033[33m{random_bucket}\033[0m")
-
-            query = {
-                "bool": {
-                    "must": [
-                        {"term": {"visited": False}},
-                        {"wildcard": {"url": f"*{extension}"}},
-                        {"term": {"random_bucket": random_bucket}}
-                    ]
-                }
-            }
-
-            try:
-                result = db.es.search(index=URLS_INDEX, query=query, size=10000)
-                urls = result.get("hits", {}).get("hits", [])
-
-                # Shuffle the URLs to avoid sequential hitting
-                random.shuffle(urls)
-
-                for hit in urls:
-                    url = hit["_source"]["url"]
-                    fast_extension_crawler(url, extension, content_type_patterns, db)
-
-            except Exception as e:
-                print(f"[FAST CRAWLER] Error retrieving URLs for extension {extension} in bucket {random_bucket}: {e}")
-
-
 def fast_extension_crawler(url, extension, content_type_patterns, db):
+    print('url {}'.format(url))
     headers = {"User-Agent": UserAgent().random}
     try:
         head_resp = requests.head(url, timeout=(10, 10), allow_redirects=True, verify=False, headers=headers)
     except Exception as e:
-        db_insert_if_new_url(url=url,visited=True,words='',min_webcontent='',raw_webcontent='',source='fast_extension_crawler.head.exception',db=db)
+        db_insert_if_new_url(url=url, visited=True, words='', min_webcontent='', raw_webcontent='',
+                             source='fast_extension_crawler.head.exception', db=db)
         return
-    
+
     if not (200 <= head_resp.status_code < 300):
-        #print(f"[FAST CRAWLER] Skipping {url} due to non-2xx HEAD status: {head_resp.status_code}")
         return
-    
+
     content_type = head_resp.headers.get("Content-Type", "").lower().split(";")[0].strip()
     if not any(re.match(pattern, content_type) for pattern in content_type_patterns):
-        #print(f"[FAST CRAWLER] Skipping {url}: mismatched content-type '{content_type}' for extension '{extension}'")
         return
 
     try:
@@ -1233,13 +1208,11 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
         if HUNT_OPEN_DIRECTORIES:
             insert_directory_tree(url, db)
 
-        # Try to find a matching function
         found = False
         for regex, function in content_type_functions:
             if regex.search(content_type):
                 found = True
 
-                # If download is needed, fetch full content
                 needs_download = (
                     (function.__name__ == "content_type_pdfs" and DOWNLOAD_PDFS) or
                     (function.__name__ == "content_type_compresseds" and DOWNLOAD_COMPRESSEDS) or
@@ -1247,7 +1220,7 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
                     (function.__name__ == "content_type_midis" and DOWNLOAD_MIDIS) or
                     (function.__name__ == "content_type_images" and DOWNLOAD_NSFW) or 
                     (function.__name__ == "content_type_images" and DOWNLOAD_SFW) or 
-                    (function.__name__ == "content_type_images" and DOWNLOAD_ALL_IMAGES) 
+                    (function.__name__ == "content_type_images" and DOWNLOAD_ALL_IMAGES)
                 )
 
                 content = None
@@ -1276,6 +1249,59 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
 
     except Exception as e:
         print(f"[FAST CRAWLER] Error processing {url}: {e}")
+
+
+def run_fast_extension_pass(db, max_workers=MAX_FAST_WORKERS):
+    shuffled_extensions = list(EXTENSION_MAP.items())
+    random.shuffle(shuffled_extensions)
+
+    for extension, content_type_patterns in shuffled_extensions:
+        buckets = list(range(ELASTICSEARCH_RANDOM_BUCKETS))
+        random.shuffle(buckets)
+
+        for random_bucket in buckets:
+            print(f"[FAST CRAWLER] Extension: {extension} | Bucket: \033[33m{random_bucket}\033[0m")
+
+            query = {
+                "bool": {
+                    "must": [
+                        {"term": {"visited": False}},
+                        {"wildcard": {"url": f"*{extension}"}},
+                        {"term": {"random_bucket": random_bucket}}
+                    ]
+                }
+            }
+
+            try:
+                result = db.es.search(index=URLS_INDEX, query=query, size=10000)
+                urls = result.get("hits", {}).get("hits", [])
+
+                if not urls:
+                    continue
+
+                random.shuffle(urls)
+
+                # Prepare (url, extension) tuples
+                urls_with_extensions = [
+                    (hit["_source"]["url"], extension)
+                    for hit in urls
+                ]
+
+                # Run fast crawlers concurrently
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = [
+                        executor.submit(fast_extension_crawler, url, extension, content_type_patterns, db)
+                        for url, extension in urls_with_extensions
+                    ]
+                    for future in as_completed(futures):
+                        try:
+                            future.result()
+                        except Exception as e:
+                            print(f"[FAST CRAWLER] Exception during execution: {e}")
+
+            except Exception as e:
+                print(f"[FAST CRAWLER] Error retrieving URLs for extension {extension} in bucket {random_bucket}: {e}")
+
 
 
 def remove_urls_with_spaces(db):

@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from elasticsearch import NotFoundError, RequestError
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError, RequestError
+from elasticsearch import ConflictError
+
 
 def sanitize_url(url):
     url = url.strip()
@@ -130,7 +132,8 @@ def db_insert_if_new_url(url='', isopendir=None, visited=None, source='', conten
             try:
                 existing_doc = db.con.get(index=URLS_INDEX, id=doc_id)["_source"]
             except Exception:
-                pass
+                print(f"[DEBUG] Could not fetch existing doc for {url}: {get_err}")
+
 
         # Insert-only fields
         insert_only_fields = {
@@ -253,20 +256,34 @@ def db_insert_if_new_url(url='', isopendir=None, visited=None, source='', conten
         upsert_doc["updated_at"] = now_iso
         doc["updated_at"] = now_iso
 
-        db.con.update(
-            index=URLS_INDEX,
-            id=doc_id,
-            body={
-                "scripted_upsert": True,
-                "script": {
-                    "source": script,
-                    "lang": "painless",
-                    "params": doc
-                },
-                "upsert": upsert_doc
-            }
-        )
-        return True
+        for attempt in range(2):  # Try up to 2 times
+            try:
+                db.con.update(
+                    index=URLS_INDEX,
+                    id=doc_id,
+                    body={
+                        "scripted_upsert": True,
+                        "script": {
+                            "source": script,
+                            "lang": "painless",
+                            "params": doc
+                        },
+                        "upsert": upsert_doc
+                    }
+                )
+                return True  # ✅ Success on first or second attempt
+            except ConflictError as ce:
+                if attempt == 0:
+                    if debug:
+                        print(f"[RETRY] 🔁 Version conflict on first attempt for URL: {url}")
+                    time.sleep(0.05)  # Slight pause before retry
+                else:
+                    print(f"[Elasticsearch] ❌ Final ConflictError on retry for URL '{url}': {ce}")
+                    return False
+            except Exception as e:
+                print(f"[Elasticsearch] ❌ Error inserting URL '{url}': {type(e).__name__} - {e}")
+                return False
+
 
     except Exception as e:
         print(f"[Elasticsearch] ❌ Error inserting URL '{url}': {type(e).__name__} - {e}")
@@ -356,6 +373,7 @@ content_type_compressed_regex =[
         r"^application/x-tar$",
         r"^application/x-gtar-compressed$",
         r"^application/x-xz$",
+        r"^application/x-7z-compressed$",
     ]
 
 content_type_pdf_regex = [
@@ -409,6 +427,7 @@ content_type_video_regex = [
         r"^video/mp4$",
         r"^video/ogg$",
         r"^video/f4v$",
+        r"^application/wmv$",
         r"^video/m2ts$",
         r"^video/webm$",
         r"^video/MP2T$",
@@ -591,6 +610,7 @@ content_type_all_others_regex = [
         r"^x-font/woff$",
         r"^font/x-woff2$",
         r"^font/opentype$",
+        r"^model/vnd\.mts$",
         r"^text/css$",
         r"^text/x-unknown-content-type$",
         r"^text/plaincharset:",
@@ -604,7 +624,6 @@ content_type_all_others_regex = [
         r"^application/rtf$",
         r"^application/ogg$",
         r"^application/csv$",
-        r"^application/wmv$",
         r"^application/epub$",
         r"^application/node$",
         r"^application/xlsx$",
@@ -660,6 +679,7 @@ content_type_all_others_regex = [
         r"^application/pkix-cert$",
         r"^application/x-mpegurl$",
         r"^application/font-woff$",
+        r"^application/smil\+xml$",
         r"^application/postscript$",
         r"^application/x-font-ttf$",
         r"^application/x-font-otf$",
@@ -670,7 +690,6 @@ content_type_all_others_regex = [
         r"^application/pkcs7-mime$",
         r"^application/font-woff2$",
         r"^application/javascript$",
-        r"^-application/x-ndjson-$",
         r"^application/oct-stream$",
         r"^application/vnd\.yt-ump$",
         r"^application/octetstream$",
@@ -679,6 +698,7 @@ content_type_all_others_regex = [
         r"^application/x-httpd-php$",
         r"^application/x-directory$",
         r"^application/x-troff-man$",
+        r"^application/x-bittorrent$",
         r"^application/java-archive$",
         r"^application/x-javascript$",
         r"^application/x-msdownload$",
@@ -721,10 +741,12 @@ content_type_all_others_regex = [
         r"^application/x-ms-dos-executable$",
         r"^application/vnd\.apple\.mpegurl$",
         r"^application/x-pkcs7-certificates$",
+        r"^application/vnd\.lotus-screencam$",
         r"^application/vnd\.imgur\.v1\+json$",
         r"^application/x-www-form-urlencoded$",
         r"^application/x-typekit-augmentation$",
         r"^application/x-unknown-content-type$",
+        r"^application/graphql-response\+json$",
         r"^application/x-research-info-systems$",
         r"^application/vnd\.mapbox-vector-tile$",
         r"^application/vnd\.ms-word\.document\.12$",
@@ -768,4 +790,6 @@ EXTENSION_MAP = {
         ".gif": content_type_image_regex,
         ".pdf": content_type_pdf_regex,
         ".mp3": content_type_audio_regex,
+        ".mp4": content_type_video_regex,
+        ".wmv": content_type_video_regex,
     }

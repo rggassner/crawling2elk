@@ -757,6 +757,7 @@ content_type_all_others_regex = [
         r"^application/vnd\.oasis\.opendocument\.text$",
         r"^application/vnd\.oasis\.opendocument\.spreadsheet$",
         r"^application/vnd\.oasis\.opendocument\.presentation$",
+        r"^font/woff2\|application/octet-stream\|font/x-woff2$",
         r"^application/vnd\.google\.octet-stream-compressible$",
         r"^application/vnd\.ms-excel\.sheet\.macroenabled\.12$",
         r"^application/vnd.oasis.opendocument.formula-template$",
@@ -773,6 +774,7 @@ content_type_all_others_regex = [
         r"^javascript charset=UTF-8$",
         r"^javascriptcharset=UTF-8$",
         r"^model/usd$",
+        r"^model/stl$",
         r"^model/obj$",
         r"^model/gltf-binary$",
         r"^multipart/form-data$",
@@ -784,6 +786,7 @@ EXTENSION_MAP = {
         ".midi": content_type_midi_regex,
         ".mid": content_type_midi_regex,
         ".zip": content_type_compressed_regex,
+        ".rar": content_type_compressed_regex,
         ".gz": content_type_compressed_regex,
         ".jpg": content_type_image_regex,
         ".png": content_type_image_regex,
@@ -793,3 +796,4 @@ EXTENSION_MAP = {
         ".mp4": content_type_video_regex,
         ".wmv": content_type_video_regex,
     }
+

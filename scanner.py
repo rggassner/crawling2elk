@@ -175,7 +175,7 @@ if __name__ == "__main__":
     ports = load_nmap_services(SERVICES_INVENTORY)
 
     ip_count = 4096  # Number of IPs to scan in each run
-    concurrency = 2
+    concurrency = MAX_SCANNER_WORKERS
     ip_list = generate_random_ips(ip_count,include_networks=SCAN_NETWORKS,exclude_networks=NOSCAN_NETWORKS)
     asyncio.run(scan_ips(ip_list, concurrency, args.verbose,db=db))
     print("Scan completed.")

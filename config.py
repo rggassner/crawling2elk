@@ -64,14 +64,16 @@ HUNT_OPEN_DIRECTORIES=True
 EMBED_PORT="4443"
 HTTPS_EMBED='https://localhost:'+EMBED_PORT+'/embed.html?url='
 
-MAX_FAST_WORKERS=10
+#How many async workers for each instance type
+MAX_FAST_WORKERS=1
+MAX_SCANNER_WORKERS=1
 
 ELASTICSEARCH_HOST="127.0.0.1"
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_USER='elastic'
 ELASTICSEARCH_PASSWORD='yourpassword'
 ELASTICSEARCH_CA_CERT_PATH=None
-ELASTICSEARCH_RANDOM_BUCKETS=7
+ELASTICSEARCH_RANDOM_BUCKETS=20
 MAX_ES_RETRIES=10
 ES_RETRY_DELAY=1
 URLS_INDEX='urls'
@@ -108,23 +110,6 @@ BE_GREEDY=False
 host_regex_block_list = [
     r'localhost:4443$',
     r'(^|\.)google$',
-    r'(^|\.)google\.com$',
-    r'(^|\.)gstatic\.com$',
-    r'(^|\.)google\.dev$',
-    r'(^|\.)youtube\.com$',
-    r'(^|\.)archive\.org$',
-    r'(^|\.)booking\.com$',
-    r'(^|\.)adthrive\.com$',
-    r'(^|\.)google\.com\.br$',
-    r'(^|\.)googleapis\.com$',
-    r'(^|\.)doubleclick\.net$',
-    r'(^|\.)rubiconproject\.com$',
-    r'(^|\.)amazon-adsystem\.com$',
-    r'(^|\.)google-analytics\.com$',
-    r'(^|\.)googletagmanager\.com$',
-    r'(^|\.)googleadservices\.com$',
-    r'(^|\.)syndicatedsearch\.goog$',
-    r'(^|\.)googlesyndication\.com$',
 ]
 
 #do not crawl urls that match any of these regexes
@@ -163,3 +148,4 @@ NOSCAN_NETWORKS = [
     "100.64.0.0/10",
     "169.254.0.0/16"
 ]
+

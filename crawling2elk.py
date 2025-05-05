@@ -624,7 +624,7 @@ def get_page(url, driver, db):
 
                     try: 
                         content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
-                    except ValueError as e:  # 🛠️ Catch specific Brotli decompression failure
+                    except ValueError as e:  # 🛠 Catch specific Brotli decompression failure
                         if "BrotliDecompress failed" in str(e):
                             db_insert_if_new_url(url=url,visited=True,source='BrotliDecompressFailed',parent_host=parent_host,db=db)
                             continue
@@ -636,6 +636,9 @@ def get_page(url, driver, db):
                             continue
                         elif "BadGzipFile when decoding" in str(e):
                             db_insert_if_new_url(url=url,visited=True,source='BadGzipFile',parent_host=parent_host,db=db)
+                            continue
+                        elif "UnicodeDecodeError when decoding" in str(e):
+                            db_insert_if_new_url(url=url,visited=True,source='UnicodeDecodeError',parent_host=parent_host,db=db)
                             continue
                         else:
                             print(f"\033[91m🚨 !!!! This was not updated in the database, you need to deal with this error in the code function get_page [DECODE ERROR] {url} - {e} -\033[0m")
@@ -1017,7 +1020,7 @@ def get_oldest_unvisited_urls_from_bucket(db, size=100):
         hits = response.get('hits', {}).get('hits', [])
         if hits:
             for hit in hits:
-                print(f'    Selected bucket: \033[33m{hit["_source"]["url"]}\033[0m')
+                print(f'    \033[35m{hit["_source"]["url"]}\033[0m')
             random.shuffle(hits)  # Shuffle the list in-place
             return [{
                 "url": hit["_source"]["url"],
@@ -1030,6 +1033,7 @@ def get_urls_by_random_bucket_and_host_prefix(db, size=100):
     """Get 1 unvisited URL per host from a random bucket where host starts with a random character."""
     for attempt in range(MAX_ES_RETRIES):
         random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
+        print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
         prefix_char = random.choice(string.ascii_lowercase + string.digits)
 
         query_body = {
@@ -1079,14 +1083,16 @@ def get_urls_by_random_bucket_and_host_prefix(db, size=100):
                 "url": r["inner_hits"]["random_unvisited_url"]["hits"]["hits"][0]["_source"]["url"],
                 "host": r["_source"]["host"]
             } for r in results]
+            for url in urls:
+                print('    \033[35m{}\033[0m'.format(url['url']))
             random.shuffle(urls)
             return urls
     return []
 
 def get_random_host_domains(db, size=100):
-    """Original logic: get unvisited URLs from random hosts."""
     for attempt in range(MAX_ES_RETRIES):
         random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
+        print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
         query_body = {
             "size": size,
             "query": {
@@ -1127,10 +1133,13 @@ def get_random_host_domains(db, size=100):
 
         if results:
             random.shuffle(results)
-            return [{
+            result = [{
                 "url": r["inner_hits"]["random_hit"]["hits"]["hits"][0]["_source"]["url"],
                 "host": r["_source"]["host"]
             } for r in results]
+            for url in result:
+                print('    \033[35m{}\033[0m'.format(url['url']))
+            return result
         return []
 
 def db_create_database(initial_url, db):
@@ -1423,3 +1432,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

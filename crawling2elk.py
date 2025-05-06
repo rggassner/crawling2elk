@@ -624,7 +624,7 @@ def get_page(url, driver, db):
 
                     try: 
                         content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
-                    except ValueError as e:  # 🛠 Catch specific Brotli decompression failure
+                    except ValueError as e:  # 🛠️ Catch specific Brotli decompression failure
                         if "BrotliDecompress failed" in str(e):
                             db_insert_if_new_url(url=url,visited=True,source='BrotliDecompressFailed',parent_host=parent_host,db=db)
                             continue
@@ -828,7 +828,16 @@ def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
 
 def get_url_from_file():
     with open(URL_FILE, 'r', encoding='utf-8') as file:
-        urls=json.load(file)
+        urls = []
+        for line in file:
+            # Strip whitespace and skip empty lines
+            url = line.strip()
+            if not url:
+                continue
+            # Extract hostname from the URL
+            parsed_url = urlparse(url)
+            host = parsed_url.netloc
+            urls.append({"url": url, "host": host})
         #random.shuffle(urls)
         return urls
 
@@ -1432,4 +1441,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

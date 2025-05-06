@@ -71,7 +71,7 @@ MAX_SCANNER_WORKERS=1
 ELASTICSEARCH_HOST="127.0.0.1"
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_USER='elastic'
-ELASTICSEARCH_PASSWORD='yourpassword'
+ELASTICSEARCH_PASSWORD='yourpasswordhere'
 ELASTICSEARCH_CA_CERT_PATH=None
 ELASTICSEARCH_RANDOM_BUCKETS=20
 MAX_ES_RETRIES=10
@@ -85,7 +85,7 @@ WORDS_TO_LOWER=True
 WORDS_MIN_LEN=3
 #WORDS_MAX_LEN * WORDS_MAX_WORDS should be under 1 million for a default elastic search env
 WORDS_MAX_LEN=40
-WORDS_MAX_WORDS=24999
+WORDS_MAX_WORDS=24000
 
 RANDOM_SITES_QUEUE=100
 
@@ -95,13 +95,9 @@ MAX_HOST_LEVELS=7
 EXTRACT_RAW_WEBCONTENT=True
 EXTRACT_MIN_WEBCONTENT=True
 
-MAX_WEBCONTENT_SIZE=999999 #should be under 1 million for a default elastic search env
-URL_FILE='urls.json'
-#URL File format
-#[
-#{"url": "https://crawler-test.com/", "host": "crawler-test.com"},
-#{"url": "https://crawler-test.com/content/custom_text", "host": "crawler-test.com"}
-#]
+MAX_WEBCONTENT_SIZE=900000 #should be under 1 million for a default elastic search env
+#URL File should be one url per line
+URL_FILE='urls.txt'
 
 #be_greedy = True - Save urls to database that might not work, since have not matched any regex.
 BE_GREEDY=False

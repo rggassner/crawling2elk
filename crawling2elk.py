@@ -1350,16 +1350,20 @@ def remove_blocked_hosts_from_es_db(db):
 
     deleted = 0
     query = {"query": {"match_all": {}}}
-
-    for doc in helpers.scan(db.es, index=URLS_INDEX, query=query):
-        url = doc['_source'].get('url')
-        if not url:
-            continue
-        host = urlsplit(url).hostname or ''
-        if is_blocked(host):
-            db.es.delete(index=URLS_INDEX, id=doc['_id'])
-            print(f"🧹 Deleted: {url}")
-            deleted += 1
+    try:
+        for doc in helpers.scan(db.es, index=URLS_INDEX, query=query):
+            url = doc['_source'].get('url')
+            if not url:
+                continue
+            host = urlsplit(url).hostname or ''
+            if is_blocked(host):
+                db.es.delete(index=URLS_INDEX, id=doc['_id'])
+                print(f"🧹 Deleted: {url}")
+                deleted += 1
+    except NotFoundError as e:
+        if "index_not_found_exception" in str(e):
+            print("Elasticsearch index missing. Creating now...")
+            db_create_database(INITIAL_URL, db=db)
     print(f"\n✅ Done. Total deleted: {deleted}")
 
 def make_https_app():

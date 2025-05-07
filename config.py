@@ -68,6 +68,7 @@ HTTPS_EMBED='https://localhost:'+EMBED_PORT+'/embed.html?url='
 MAX_FAST_WORKERS=1
 MAX_SCANNER_WORKERS=1
 
+#Elasticsearch connection configuration
 ELASTICSEARCH_HOST="127.0.0.1"
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_USER='elastic'
@@ -114,8 +115,10 @@ url_regex_block_list = [
     '/images/images/images/images/',
 ]
 
+#crawl only domains that match this regex
 host_regex_allow_list = [r'.*']
 
+#A weight for every method of url picking
 METHOD_WEIGHTS = {
     "from_file":    0,
     "fewest_urls":  1,
@@ -144,4 +147,3 @@ NOSCAN_NETWORKS = [
     "100.64.0.0/10",
     "169.254.0.0/16"
 ]
-

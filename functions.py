@@ -7,80 +7,189 @@ from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError, RequestError
 from elasticsearch import ConflictError
 
-
 def sanitize_url(url):
+    """
+    Sanitize URLs by removing quotes, fixing common typos, and normalizing format.
+    """
+    pre_sanitize=url
+    if not url or not isinstance(url, str):
+        return ""
+    
+    # Strip whitespace from both ends
     url = url.strip()
-    url = url.rstrip()
+    
+    quote_patterns = [
+        r'^["\'](.*)["\']$',  # Basic quotes at start and end
+        r'^["\'](.*)',        # Basic quotes only at start
+        r'(.*)["\'"]$'        # Basic quotes only at end
+    ]
 
-    # Remove strange quotes
-    url = re.sub(r'^“(.*)"', r"\1", url)
-    url = re.sub(r'^”(.*)”$', r"\1", url)
-    url = re.sub(r'^“(.*)“$', r"\1", url)
-    url = re.sub(r'^"(.*)"$', r"\1", url)
-    url = re.sub(r'^“(.*)”$', r"\1", url)
-    url = re.sub(r'^‘(.*)’$', r"\1", url)
-    url = re.sub(r'^"(.*)\'$', r"\1", url)
-    url = re.sub(r"^'(.*)'$", r"\1", url)
-    url = re.sub(r'^”(.*)″$', r"\1", url)
+    # Fixed special quote pairs with proper escaping
+    special_quote_pairs = [
+        (r'^"(.*)"$', r'\1'),           # Smart double quotes (U+201C, U+201D)
+        (r'^\'(.*)\'$', r'\1'),         # Smart single quotes (U+2018, U+2019)
+        (r'^\u201C(.*)\u201D$', r'\1'), # Smart double quotes explicit Unicode
+        (r'^\u2018(.*)\u2019$', r'\1'), # Smart single quotes explicit Unicode
+        (r'^"(.*)″$', r'\1'),           # Other quote variants
+    ]
 
-    # Remove fragment
-    url = re.sub(r'^(.+)#.*$', r"\1", url)
+    # Special handling for archive.org and similar services with embedded URLs
+    archive_patterns = [
+        # Wayback Machine URLs
+        r'^(https?://web\.archive\.org/web/\d+/)(.+)$',
+        # Other archive services with similar patterns
+        r'^(https?://archive\.(today|is|fo)/\w+/)(.+)$',
+    ]
 
-    # Common typo fixups
-    url = re.sub(r"^www\.", "http://www.", url)
-    url = re.sub(r"^ps://", "https://", url)
-    url = re.sub(r"^ttps://", "https://", url)
-    url = re.sub(r"^htto://", "http://", url)
-    url = re.sub(r"^htt://", "http://", url)
-    url = re.sub(r"^htpps://", "https://", url)
-    url = re.sub(r"^httpp://", "https://", url)
-    url = re.sub(r"^http:s//", "https://", url)
-    url = re.sub(r"^hthttps://", "https://", url)
-    url = re.sub(r"^httsp://", "https://", url)
-    url = re.sub(r"^htts://", "https://", url)
-    url = re.sub(r"^htp://http//", "http://", url)
-    url = re.sub(r"^htp://", "http://", url)
-    url = re.sub(r"^htttps://", "https://", url)
-    url = re.sub(r"^https:https://", "https://", url)
-    url = re.sub(r"^hhttp://", "http://", url)
-    url = re.sub(r"^http:/http://", "http://", url)
-    url = re.sub(r"^https https://", "https://", url)
-    url = re.sub(r"^httpshttps://", "https://", url)
-    url = re.sub(r"^https://https://", "https://", url)
-    url = re.sub(r'^"https://', "https://", url)
-    url = re.sub(r"^http:www", "http://www", url)
-    url = re.sub(r"^httpd://", "https://", url)
-    url = re.sub(r"^htps://", "https://", url)
-    url = re.sub(r"^https: //", "https://", url)
-    url = re.sub(r"^https : //", "https://", url)
-    url = re.sub(r"^http2://", "https://", url)
-    url = re.sub(r"^htttp://", "http://", url)
-    url = re.sub(r"^ttp://", "http://", url)
-    url = re.sub(r"^https%3A//", "https://", url)
-    url = re.sub(r"^%20https://", "https://", url)
-    url = re.sub(r"^%20http://", "http://", url)
-    url = re.sub(r"^%22mailto:", "mailto:", url)
-    url = re.sub(r"^httpqs://", "https://www.", url)
-    url = re.sub(r"^[a-zA-Z.“(´]https://", "https://", url)
-    url = re.sub(r"^[a-zA-Z.“(´]http://", "http://", url)
-    url = re.sub(r"^https[a-zA-Z.“(´]://", "https://", url)
-    url = re.sub(r"^http[.“(´]://", "http://", url)
-    url = re.sub(r"^://", "https://", url)
+    for pattern in archive_patterns:
+        match = re.search(pattern, url)
+        if match:
+            # Found an archive URL with embedded content URL
+            archive_prefix = match.group(1)  # The archive.org part
+            embedded_url = match.group(2)    # The embedded original URL
 
+            # Fix the embedded URL separately without affecting the archive prefix
+            # Ensure the scheme separator has double slashes
+            if re.match(r'^https?:', embedded_url):
+                embedded_url = re.sub(r'^(https?:)/(?!/)', r'\1//', embedded_url)
+
+            # Recombine and return
+            fixed_url = archive_prefix + embedded_url
+
+            # Skip most other sanitization for these special URLs
+            # But we still want to handle fragments if that's your policy
+            if '#' in fixed_url and your_config_remove_fragments:
+                fixed_url = re.sub(r'^(.+)#.*$', r"\1", fixed_url)
+
+            if pre_sanitize != fixed_url:
+                print("\033[91m URL has been sanitized from -{}- to -{}- \033[00m".format(pre_sanitize, fixed_url))
+            return fixed_url
+
+    for pattern in quote_patterns:
+        url = re.sub(pattern, r'\1', url)
+
+    for pattern, replacement in special_quote_pairs:
+        url = re.sub(pattern, replacement, url)
+    
+    # Group common URL scheme fixes
+    scheme_fixes = [
+        (r'^www\.', 'http://www.'),
+        # HTTPS fixes
+        (r'^ps://', 'https://'),
+        (r'^ttps://', 'https://'),
+        (r'^htpps://', 'https://'),
+        (r'^httpp://', 'https://'),
+        (r'^http:s//', 'https://'),
+        (r'^hthttps://', 'https://'),
+        (r'^httsp://', 'https://'),
+        (r'^htts://', 'https://'),
+        (r'^htttps://', 'https://'),
+        (r'^https:https://', 'https://'),
+        (r'^https https://', 'https://'),
+        (r'^httpshttps://', 'https://'),
+        (r'^https://https://', 'https://'),
+        (r'^"https://', 'https://'),
+        (r'^httpd://', 'https://'),
+        (r'^htps://', 'https://'),
+        (r'^https: //', 'https://'),
+        (r'^https : //', 'https://'),
+        (r'^http2://', 'https://'),
+        (r'^https%3A//', 'https://'),
+        (r'^%20https://', 'https://'),
+        
+        # HTTP fixes
+        (r'^htto://', 'http://'),
+        (r'^htt://', 'http://'),
+        (r'^htp://http//', 'http://'),
+        (r'^htp://', 'http://'),
+        (r'^hhttp://', 'http://'),
+        (r'^http:/http://', 'http://'),
+        (r'^http:www', 'http://www'),
+        (r'^htttp://', 'http://'),
+        (r'^ttp://', 'http://'),
+        (r'^%20http://', 'http://'),
+        
+        # Other protocol fixes
+        (r'^%22mailto:', 'mailto:'),
+        (r'^httpqs://', 'https://www.'),
+        (r'^://', 'https://'),
+    ]
+    
+    for pattern, replacement in scheme_fixes:
+        url = re.sub(pattern, replacement, url)
+    
+    # Clean up prefix characters
+    url = re.sub(r'^[a-zA-Z."(´]https://', 'https://', url)
+    url = re.sub(r'^[a-zA-Z."(´]http://', 'http://', url)
+    url = re.sub(r'^https[a-zA-Z."(´]://', 'https://', url)
+    url = re.sub(r'^http[."(´]://', 'http://', url)
+    
     # Replace internal spaces with %20
     url = url.replace(" ", "%20")
-
-    # Lowercase scheme and host only
+    
+    # Fix multiple forward slashes in the scheme part
+    # This specifically targets cases like http:////www.wordencompany.com
+    url = re.sub(r'^(https?:)/+', r'\1//', url)
+    
+    # Fix multiple forward slashes in the path
+    # First parse the URL to separate components
     try:
-        parts = urlsplit(url)
-        scheme = parts.scheme.lower()
-        netloc = parts.netloc.lower()
-        url = urlunsplit((scheme, netloc, parts.path, parts.query, parts.fragment))
+        parsed_url = urlsplit(url)
+        scheme = parsed_url.scheme.lower()
+        netloc = parsed_url.netloc.lower()
+        
+        # If netloc is empty and path contains multiple slashes at the beginning,
+        # it might be a malformed URL with the domain in the path
+        if not netloc and parsed_url.path.startswith('/'):
+            # Potential malformed URL like http:////www.example.com
+            path_parts = parsed_url.path.lstrip('/').split('/', 1)
+            if path_parts and '.' in path_parts[0]:  # Likely a domain with a dot
+                netloc = path_parts[0]
+                path = '/' + (path_parts[1] if len(path_parts) > 1 else '')
+                # Reconstruct the URL
+                url = urlunsplit((scheme, netloc, path, parsed_url.query, parsed_url.fragment))
+        else:
+            # Fix multiple slashes in the path portion
+            path = re.sub(r'/{2,}', '/', parsed_url.path)
+            url = urlunsplit((scheme, netloc, path, parsed_url.query, parsed_url.fragment))
+        
     except Exception:
-        pass  # In case urlsplit fails (bad input), skip
-
-    return url.strip()
-
+        # If parsing fails, try a more direct approach
+        # This is a fallback for malformed URLs
+        url = re.sub(r'(https?://[^/]+)/{2,}', r'\1/', url)
+    
+    # Handle URL parsing and normalization
+    try:
+        # Parse the URL again after fixes
+        parsed_url = urlsplit(url)
+        
+        # Lowercase scheme and netloc
+        scheme = parsed_url.scheme.lower()
+        netloc = parsed_url.netloc.lower()
+        
+        # Remove default ports
+        if ':' in netloc:
+            host, port = netloc.split(':', 1)
+            if (scheme == 'http' and port == '80') or (scheme == 'https' and port == '443'):
+                netloc = host
+        
+        # Remove fragments
+        fragment = ''
+        
+        # Normalize path (remove duplicate slashes)
+        path = re.sub(r'/{2,}', '/', parsed_url.path)
+        
+        # Construct normalized URL
+        normalized_url = urlunsplit((scheme, netloc, path, parsed_url.query, fragment))
+        if pre_sanitize != normalized_url:
+            print("\033[91m Url has been sanitize from -{}- to -{}- \033[00m".format(pre_sanitize,normalized_url.strip()))
+        return normalized_url.strip()
+            
+    except Exception:
+        if pre_sanitize != url:
+            print("\033[91m Url has been sanitize from -{}- to -{}- \033[00m".format(pre_sanitize,url.strip()))
+        # If URL parsing fails, return what we have so far
+        return url.strip()
 
 class DatabaseConnection:
     def __init__(self):
@@ -123,6 +232,7 @@ def db_insert_if_new_url(url='', isopendir=None, visited=None, source='', conten
 
     host = urlsplit(url)[1]
     url = remove_jsessionid_with_semicolon(url)
+    url = sanitize_url(url)
     now_iso = datetime.now(timezone.utc).isoformat()
     doc_id = hash_url(url)
 
@@ -345,6 +455,7 @@ content_type_audio_regex=[
         r"^audio/opus$",
         r"^audio/x-rpm$",
         r"^audio/x-wav$",
+        r"^audio/x-flac$",
         r"^audio/unknown$",
         r"^audio/mpegurl$",
         r"^audio/x-scpls$",
@@ -456,6 +567,7 @@ content_type_plain_text_regex = [
         r"^text/json$",
         r"^text/yaml$",
         r"^text/x-js$",
+        r"^text/ascii$",
         r"^text/vcard$",
         r"^text/x-tex$",
         r"^text/plain$",
@@ -475,6 +587,7 @@ content_type_plain_text_regex = [
         r"^application/text$",
         r"^application/jsonp$",
         r"^text/x-javascript$",
+        r"^text/event-stream$",
         r"^application/ld\+json$",
         r"^application/ion\+json$",
         r"^application/hal\+json$",
@@ -709,12 +822,14 @@ content_type_all_others_regex = [
         r"^application/x-base64-frpc$",
         r"^application/pgp-signature$",
         r"^application/x-ms-manifest$",
+        r"^application/x-mobi8-ebook$",
         r"^application/grpc-web-text$",
         r"^application/vnd\.ms-excel$",
         r"^application/force-download$",
         r"^x-application/octet-stream$",
         r"^application/x-x509-ca-cert$",
         r"^application/grpc-web\+proto$",
+        r"^application/x-amz-json-1\.0$",
         r"^application/x-msdos-program$",
         r"^application/x-font-truetype$",
         r"^application/x-font-opentype$",
@@ -743,6 +858,7 @@ content_type_all_others_regex = [
         r"^application/x-pkcs7-certificates$",
         r"^application/vnd\.lotus-screencam$",
         r"^application/vnd\.imgur\.v1\+json$",
+        r"^value=application/x-font-woff2$",
         r"^application/x-www-form-urlencoded$",
         r"^application/x-typekit-augmentation$",
         r"^application/x-unknown-content-type$",
@@ -750,12 +866,16 @@ content_type_all_others_regex = [
         r"^application/x-research-info-systems$",
         r"^application/vnd\.mapbox-vector-tile$",
         r"^application/vnd\.ms-word\.document\.12$",
+        r"^application/vnd\.vimeo\.location\+json$",
         r"^application/opensearchdescription\+xml$",
         r"^application/vnd\.google-earth\.kml\+xml$",
         r"^application/vnd\.ms-excel\.openxmlformat$",
         r"^application/vnd\.android\.package-archive$",
         r"^application/vnd\.oasis\.opendocument\.text$",
+        r"^application/vnd\.vimeo\.currency\.json\+json$",
+        r"^application/vnd\.vimeo\.marketplace\.skill\+json$",
         r"^application/vnd\.oasis\.opendocument\.spreadsheet$",
+        r"^application/vnd\.disney\.field\.error\.v1\.0\+json$",
         r"^application/vnd\.oasis\.opendocument\.presentation$",
         r"^font/woff2\|application/octet-stream\|font/x-woff2$",
         r"^application/vnd\.google\.octet-stream-compressible$",

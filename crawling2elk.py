@@ -1320,11 +1320,16 @@ def run_fast_extension_pass(db, max_workers=MAX_FAST_WORKERS):
             except Exception as e:
                 print(f"[FAST CRAWLER] Error retrieving URLs for extension {extension} in bucket {random_bucket}: {e}")
 
+def is_valid_url(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+        return parsed.scheme in {"http", "https", "ftp"} and bool(parsed.netloc)
+    except Exception:
+        return False
 
-
-def remove_urls_with_spaces(db):
+def remove_invalid_urls(db):
     """
-    Deletes documents from Elasticsearch where the 'url' field contains spaces.
+    Deletes documents from Elasticsearch where the 'url' field is invalid, based on urlparse.
     """
     deleted = 0
     query = {"query": {"match_all": {}}}
@@ -1333,12 +1338,17 @@ def remove_urls_with_spaces(db):
         url = doc['_source'].get('url')
         if not url:
             continue
-        if " " in url:
+        pre_url = url
+        url=sanitize_url(url)
+        if pre_url != url :
+            print(f"🧹 Deleted sanitized URL: {pre_url}")
+            db_insert_if_new_url(url=url, visited=False, source="remove_invalid_urls",db=db)
             db.es.delete(index=URLS_INDEX, id=doc['_id'])
-            print(f"🧹 Deleted URL with space: {url}")
+        if not is_valid_url(url):
+            print(f"Sanitized url continues to be invalid!!!!: {url}")
+            #db.es.delete(index=URLS_INDEX, id=doc['_id'])
             deleted += 1
-
-    print(f"\n✅ Done. Total URLs deleted due to spaces: {deleted}")
+    print(f"\n✅ Done. Total invalid URLs deleted: {deleted}")
 
 
 def remove_blocked_hosts_from_es_db(db):
@@ -1425,8 +1435,8 @@ def main():
         time.sleep(1)  # Give HTTPS server a head start
         print("Instance 1: And now some housekeeping. Removing urls from hosts that are blocklisted and should be removed.")
         remove_blocked_hosts_from_es_db(db)
-        print("Instance 1: Deleting urls with white spaces.")
-        remove_urls_with_spaces(db)
+        print("Instance 1: Deleting invalid urls.")
+        remove_invalid_urls(db)
         print("Instance 1: Let's go full crawler mode.")
         crawler(db)
     elif instance == 2:
@@ -1445,3 +1455,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

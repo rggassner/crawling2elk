@@ -65,7 +65,7 @@ EMBED_PORT="4443"
 HTTPS_EMBED='https://localhost:'+EMBED_PORT+'/embed.html?url='
 
 #How many async workers for each instance type
-MAX_FAST_WORKERS=1
+MAX_FAST_WORKERS=4
 MAX_SCANNER_WORKERS=1
 
 #Elasticsearch connection configuration
@@ -132,10 +132,13 @@ METHOD_WEIGHTS = {
 SERVICES_INVENTORY = "/usr/share/nmap/nmap-services"
 RANDOM_PORT_CHANCE = 0.1
 
+#The scanner should focus on these networks
 SCAN_NETWORKS = [
     "0.0.0.0/0"
 ]
 
+
+#The scanner should avoid these networks
 NOSCAN_NETWORKS = [
     "10.0.0.0/8",
     "172.16.0.0/12",
@@ -147,3 +150,5 @@ NOSCAN_NETWORKS = [
     "100.64.0.0/10",
     "169.254.0.0/16"
 ]
+
+

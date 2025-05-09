@@ -624,7 +624,7 @@ def get_page(url, driver, db):
 
                     try: 
                         content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
-                    except ValueError as e:  # 🛠️ Catch specific Brotli decompression failure
+                    except ValueError as e:  # 🛠 Catch specific Brotli decompression failure
                         if "BrotliDecompress failed" in str(e):
                             db_insert_if_new_url(url=url,visited=True,source='BrotliDecompressFailed',parent_host=parent_host,db=db)
                             continue
@@ -1341,9 +1341,9 @@ def remove_invalid_urls(db):
         pre_url = url
         url=sanitize_url(url)
         if pre_url != url :
-            print(f"🧹 Deleted sanitized URL: {pre_url}")
+            print(f"🧹 Deleted sanitized URL: -{pre_url}- inserting -{url}-")
             db_insert_if_new_url(url=url, visited=False, source="remove_invalid_urls",db=db)
-            db.es.delete(index=URLS_INDEX, id=doc['_id'])
+            #db.es.delete(index=URLS_INDEX, id=doc['_id'])
         if not is_valid_url(url):
             print(f"Sanitized url continues to be invalid!!!!: {url}")
             #db.es.delete(index=URLS_INDEX, id=doc['_id'])
@@ -1352,12 +1352,9 @@ def remove_invalid_urls(db):
 
 
 def remove_blocked_hosts_from_es_db(db):
-
     compiled_blocklist = [re.compile(pattern) for pattern in host_regex_block_list]
-
     def is_blocked(host):
         return any(regex.search(host) for regex in compiled_blocklist)
-
     deleted = 0
     query = {"query": {"match_all": {}}}
     try:
@@ -1455,4 +1452,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

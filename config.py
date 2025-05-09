@@ -93,7 +93,10 @@ RANDOM_SITES_QUEUE=100
 MAX_DIR_LEVELS=7
 MAX_HOST_LEVELS=7
 
+
+#If we should or not save full html to the database
 EXTRACT_RAW_WEBCONTENT=True
+#If we should or not save rendered text page to the database
 EXTRACT_MIN_WEBCONTENT=True
 
 MAX_WEBCONTENT_SIZE=900000 #should be under 1 million for a default elastic search env
@@ -150,5 +153,4 @@ NOSCAN_NETWORKS = [
     "100.64.0.0/10",
     "169.254.0.0/16"
 ]
-
 

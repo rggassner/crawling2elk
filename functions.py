@@ -7,190 +7,6 @@ from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError, RequestError
 from elasticsearch import ConflictError
 
-def sanitize_url(url):
-    """
-    Sanitize URLs by removing quotes, fixing common typos, and normalizing format.
-    """
-    pre_sanitize=url
-    if not url or not isinstance(url, str):
-        return ""
-    
-    # Strip whitespace from both ends
-    url = url.strip()
-    
-    quote_patterns = [
-        r'^["\'](.*)["\']$',  # Basic quotes at start and end
-        r'^["\'](.*)',        # Basic quotes only at start
-        r'(.*)["\'"]$'        # Basic quotes only at end
-    ]
-
-    # Fixed special quote pairs with proper escaping
-    special_quote_pairs = [
-        (r'^"(.*)"$', r'\1'),           # Smart double quotes (U+201C, U+201D)
-        (r'^\'(.*)\'$', r'\1'),         # Smart single quotes (U+2018, U+2019)
-        (r'^\u201C(.*)\u201D$', r'\1'), # Smart double quotes explicit Unicode
-        (r'^\u2018(.*)\u2019$', r'\1'), # Smart single quotes explicit Unicode
-        (r'^"(.*)″$', r'\1'),           # Other quote variants
-    ]
-
-    # Special handling for archive.org and similar services with embedded URLs
-    archive_patterns = [
-        # Wayback Machine URLs
-        r'^(https?://web\.archive\.org/web/\d+/)(.+)$',
-        # Other archive services with similar patterns
-        r'^(https?://archive\.(today|is|fo)/\w+/)(.+)$',
-    ]
-
-    for pattern in archive_patterns:
-        match = re.search(pattern, url)
-        if match:
-            # Found an archive URL with embedded content URL
-            archive_prefix = match.group(1)  # The archive.org part
-            embedded_url = match.group(2)    # The embedded original URL
-
-            # Fix the embedded URL separately without affecting the archive prefix
-            # Ensure the scheme separator has double slashes
-            if re.match(r'^https?:', embedded_url):
-                embedded_url = re.sub(r'^(https?:)/(?!/)', r'\1//', embedded_url)
-
-            # Recombine and return
-            fixed_url = archive_prefix + embedded_url
-
-            # Skip most other sanitization for these special URLs
-            # But we still want to handle fragments if that's your policy
-            if '#' in fixed_url and your_config_remove_fragments:
-                fixed_url = re.sub(r'^(.+)#.*$', r"\1", fixed_url)
-
-            if pre_sanitize != fixed_url:
-                print("\033[91m URL has been sanitized from -{}- to -{}- \033[00m".format(pre_sanitize, fixed_url))
-            return fixed_url
-
-    for pattern in quote_patterns:
-        url = re.sub(pattern, r'\1', url)
-
-    for pattern, replacement in special_quote_pairs:
-        url = re.sub(pattern, replacement, url)
-    
-    # Group common URL scheme fixes
-    scheme_fixes = [
-        (r'^www\.', 'http://www.'),
-        # HTTPS fixes
-        (r'^ps://', 'https://'),
-        (r'^ttps://', 'https://'),
-        (r'^htpps://', 'https://'),
-        (r'^httpp://', 'https://'),
-        (r'^http:s//', 'https://'),
-        (r'^hthttps://', 'https://'),
-        (r'^httsp://', 'https://'),
-        (r'^htts://', 'https://'),
-        (r'^htttps://', 'https://'),
-        (r'^https:https://', 'https://'),
-        (r'^https https://', 'https://'),
-        (r'^httpshttps://', 'https://'),
-        (r'^https://https://', 'https://'),
-        (r'^"https://', 'https://'),
-        (r'^httpd://', 'https://'),
-        (r'^htps://', 'https://'),
-        (r'^https: //', 'https://'),
-        (r'^https : //', 'https://'),
-        (r'^http2://', 'https://'),
-        (r'^https%3A//', 'https://'),
-        (r'^%20https://', 'https://'),
-        
-        # HTTP fixes
-        (r'^htto://', 'http://'),
-        (r'^htt://', 'http://'),
-        (r'^htp://http//', 'http://'),
-        (r'^htp://', 'http://'),
-        (r'^hhttp://', 'http://'),
-        (r'^http:/http://', 'http://'),
-        (r'^http:www', 'http://www'),
-        (r'^htttp://', 'http://'),
-        (r'^ttp://', 'http://'),
-        (r'^%20http://', 'http://'),
-        
-        # Other protocol fixes
-        (r'^%22mailto:', 'mailto:'),
-        (r'^httpqs://', 'https://www.'),
-        (r'^://', 'https://'),
-    ]
-    
-    for pattern, replacement in scheme_fixes:
-        url = re.sub(pattern, replacement, url)
-    
-    # Clean up prefix characters
-    url = re.sub(r'^[a-zA-Z."(´]https://', 'https://', url)
-    url = re.sub(r'^[a-zA-Z."(´]http://', 'http://', url)
-    url = re.sub(r'^https[a-zA-Z."(´]://', 'https://', url)
-    url = re.sub(r'^http[."(´]://', 'http://', url)
-    
-    # Replace internal spaces with %20
-    url = url.replace(" ", "%20")
-    
-    # Fix multiple forward slashes in the scheme part
-    # This specifically targets cases like http:////www.wordencompany.com
-    url = re.sub(r'^(https?:)/+', r'\1//', url)
-    
-    # Fix multiple forward slashes in the path
-    # First parse the URL to separate components
-    try:
-        parsed_url = urlsplit(url)
-        scheme = parsed_url.scheme.lower()
-        netloc = parsed_url.netloc.lower()
-        
-        # If netloc is empty and path contains multiple slashes at the beginning,
-        # it might be a malformed URL with the domain in the path
-        if not netloc and parsed_url.path.startswith('/'):
-            # Potential malformed URL like http:////www.example.com
-            path_parts = parsed_url.path.lstrip('/').split('/', 1)
-            if path_parts and '.' in path_parts[0]:  # Likely a domain with a dot
-                netloc = path_parts[0]
-                path = '/' + (path_parts[1] if len(path_parts) > 1 else '')
-                # Reconstruct the URL
-                url = urlunsplit((scheme, netloc, path, parsed_url.query, parsed_url.fragment))
-        else:
-            # Fix multiple slashes in the path portion
-            path = re.sub(r'/{2,}', '/', parsed_url.path)
-            url = urlunsplit((scheme, netloc, path, parsed_url.query, parsed_url.fragment))
-        
-    except Exception:
-        # If parsing fails, try a more direct approach
-        # This is a fallback for malformed URLs
-        url = re.sub(r'(https?://[^/]+)/{2,}', r'\1/', url)
-    
-    # Handle URL parsing and normalization
-    try:
-        # Parse the URL again after fixes
-        parsed_url = urlsplit(url)
-        
-        # Lowercase scheme and netloc
-        scheme = parsed_url.scheme.lower()
-        netloc = parsed_url.netloc.lower()
-        
-        # Remove default ports
-        if ':' in netloc:
-            host, port = netloc.split(':', 1)
-            if (scheme == 'http' and port == '80') or (scheme == 'https' and port == '443'):
-                netloc = host
-        
-        # Remove fragments
-        fragment = ''
-        
-        # Normalize path (remove duplicate slashes)
-        path = re.sub(r'/{2,}', '/', parsed_url.path)
-        
-        # Construct normalized URL
-        normalized_url = urlunsplit((scheme, netloc, path, parsed_url.query, fragment))
-        if pre_sanitize != normalized_url:
-            print("\033[91m Url has been sanitize from -{}- to -{}- \033[00m".format(pre_sanitize,normalized_url.strip()))
-        return normalized_url.strip()
-            
-    except Exception:
-        if pre_sanitize != url:
-            print("\033[91m Url has been sanitize from -{}- to -{}- \033[00m".format(pre_sanitize,url.strip()))
-        # If URL parsing fails, return what we have so far
-        return url.strip()
-
 class DatabaseConnection:
     def __init__(self):
         es_config = {
@@ -215,6 +31,168 @@ class DatabaseConnection:
 
     def scroll(self, *args, **kwargs):
         return self.es.scroll(*args, **kwargs)
+
+#def sanitize_url(url, debug=True, skip_log_tags=['NORMALIZE_PATH_SLASHES','FINAL_NORMALIZE','FIX_NETLOC_IN_PATH','FIX_SCHEME_SLASHES','STRIP_WHITESPACE']):
+def sanitize_url(url, debug=True, skip_log_tags=None):
+    """
+    Sanitize URLs by removing quotes, fixing common typos, and normalizing format.
+    """
+    if skip_log_tags is None:
+        skip_log_tags = set()
+
+    def log_change(reason, before, after):
+        if before != after and reason not in skip_log_tags and debug:
+            print(f"\033[91m[{reason}] URL sanitized from -{before}- to -{after}-\033[00m")
+
+    def clean_hostname_with_userinfo(netloc, scheme):
+        """
+        Cleans netloc, preserving valid username:password@host:port patterns.
+        Removes invalid characters, strips default ports, and validates port range.
+        """
+        userinfo = ''
+        host_port = netloc
+
+        if '@' in netloc:
+            userinfo, host_port = netloc.split('@', 1)
+            # Clean userinfo (basic, do not over-sanitize)
+            userinfo = ''.join(c for c in userinfo if c.isprintable())
+
+        if ':' in host_port:
+            host, port = host_port.rsplit(':', 1)
+            host = ''.join(c for c in host if c.isalnum() or c in '-.')
+            if port.isdigit():
+                port_num = int(port)
+                if (scheme == 'http' and port == '80') or (scheme == 'https' and port == '443'):
+                    port = ''
+                elif 1 <= port_num <= 65535:
+                    pass  # valid
+                else:
+                    port = ''
+            else:
+                port = ''
+        else:
+            host = ''.join(c for c in host_port if c.isalnum() or c in '-.')
+            port = ''
+
+        result = host
+        if port:
+            result += f':{port}'
+        if userinfo:
+            result = f'{userinfo}@{result}'
+        return result
+
+    def safe_normalize_path_slashes(path):
+        # Split on any embedded full http(s) URL and keep them intact
+        segments = re.split(r'(/https?://)', path)
+        result = []
+        for i in range(0, len(segments), 2):
+            part = segments[i]
+            part = re.sub(r'/{2,}', '/', part)
+            result.append(part)
+            if i + 1 < len(segments):
+                # re-append the "/https://" or "/http://"
+                result.append(segments[i + 1])
+        return ''.join(result)
+
+    pre_sanitize = url
+    if not url or not isinstance(url, str):
+        return ""
+
+    url = url.strip()
+    log_change("STRIP_WHITESPACE", pre_sanitize, url)
+    pre_sanitize = url
+
+    quote_patterns = [
+        r'^"([^"]*)"$',
+        r"^'([^']*)'",
+        r'^"([^"]*)',
+        r"^'([^']*)'$"
+    ]
+    special_quote_pairs = [
+        (r'^"(.*)"$', r'\1'),
+        (r"^'(.*)'$", r'\1'),
+        (r'^\u201C(.*)\u201D$', r'\1'),
+        (r'^\u2018(.*)\u2019$', r'\1'),
+        (r'^"(.*)″$', r'\1'),
+    ]
+
+    for pattern in quote_patterns:
+        cleaned = re.sub(pattern, r'\1', url)
+        log_change("QUOTE_CLEAN", url, cleaned)
+        url = cleaned
+
+    for pattern, replacement in special_quote_pairs:
+        cleaned = re.sub(pattern, replacement, url)
+        log_change("SPECIAL_QUOTE_CLEAN", url, cleaned)
+        url = cleaned
+
+    scheme_fixes = [
+        (r'^ps://', 'https://'), (r'^ttps://', 'https://'),
+        (r'^htpps://', 'https://'), (r'^httpp://', 'https://'), (r'^http:s//', 'https://'),
+        (r'^hthttps://', 'https://'), (r'^httsp://', 'https://'), (r'^htts://', 'https://'),
+        (r'^htttps://', 'https://'), (r'^https:https://', 'https://'), (r'^https https://', 'https://'),
+        (r'^httpshttps://', 'https://'), (r'^https://https://', 'https://'), (r'^"https://', 'https://'),
+        (r'^httpd://', 'https://'), (r'^htps://', 'https://'), (r'^https: //', 'https://'),
+        (r'^https : //', 'https://'), (r'^http2://', 'https://'), (r'^https%3A//', 'https://'),
+        (r'^%20https://', 'https://'), (r'^htto://', 'http://'), (r'^htt://', 'http://'),
+        (r'^htp://http//', 'http://'), (r'^htp://', 'http://'), (r'^hhttp://', 'http://'),
+        (r'^http:/http://', 'http://'), (r'^http:www', 'http://www'), (r'^htttp://', 'http://'),
+        (r'^ttp://', 'http://'), (r'^%20http://', 'http://'), (r'^%22mailto:', 'mailto:'),
+        (r'^httpqs://', 'https://www.'), (r'^://', 'https://')
+    ]
+    for pattern, replacement in scheme_fixes:
+        fixed = re.sub(pattern, replacement, url)
+        log_change("FIX_SCHEME", url, fixed)
+        url = fixed
+
+    cleaned = re.sub(r'^[a-zA-Z."(´]https://', 'https://', url)
+    log_change("PREFIX_CLEAN_HTTPS", url, cleaned)
+    url = cleaned
+    cleaned = re.sub(r'^[a-zA-Z."(´]http://', 'http://', url)
+    log_change("PREFIX_CLEAN_HTTP", url, cleaned)
+    url = cleaned
+
+    url = re.sub(r'^(https?:)/+', r'\1//', url)
+    log_change("FIX_SCHEME_SLASHES", pre_sanitize, url)
+    try:
+        parsed = urlsplit(url)
+        scheme = parsed.scheme.lower()
+        netloc = clean_hostname_with_userinfo(parsed.netloc, scheme)
+
+        if not netloc and parsed.path.startswith('/'):
+            parts = parsed.path.lstrip('/').split('/', 1)
+            if parts and '.' in parts[0]:
+                netloc = clean_hostname_with_userinfo(parts[0], scheme)
+                path = '/' + (parts[1] if len(parts) > 1 else '')
+                rebuilt = urlunsplit((scheme, netloc, path, parsed.query, parsed.fragment))
+                log_change("FIX_NETLOC_IN_PATH", url, rebuilt)
+                url = rebuilt
+        else:
+            path = re.sub(r'/{2,}', '/', parsed.path)
+            rebuilt = urlunsplit((scheme, netloc, path, parsed.query, parsed.fragment))
+            log_change("NORMALIZE_PATH_SLASHES", url, rebuilt)
+            url = rebuilt
+    except Exception:
+        fallback = re.sub(r'(https?://[^/]+)/{2,}', r'\1/', url)
+        log_change("FALLBACK_SLASH_FIX", url, fallback)
+        url = fallback
+
+    try:
+        parsed = urlsplit(url)
+        scheme = parsed.scheme.lower()
+        netloc = parsed.netloc.lower()
+
+        if ':' in netloc:
+            host, port = netloc.split(':', 1)
+            if (scheme == 'http' and port == '80') or (scheme == 'https' and port == '443'):
+                netloc = host
+
+        path = safe_normalize_path_slashes(parsed.path)
+        normalized = urlunsplit((scheme, netloc, path, parsed.query, ''))
+        log_change("FINAL_NORMALIZE", url, normalized)
+        return normalized.strip()
+    except Exception:
+        return url.strip()
 
 def hash_url(url):
     return hashlib.sha256(url.encode('utf-8')).hexdigest()
@@ -909,6 +887,7 @@ EXTENSION_MAP = {
         ".rar": content_type_compressed_regex,
         ".gz": content_type_compressed_regex,
         ".jpg": content_type_image_regex,
+        ".jpeg": content_type_image_regex,
         ".png": content_type_image_regex,
         ".gif": content_type_image_regex,
         ".pdf": content_type_pdf_regex,
@@ -916,4 +895,3 @@ EXTENSION_MAP = {
         ".mp4": content_type_video_regex,
         ".wmv": content_type_video_regex,
     }
-

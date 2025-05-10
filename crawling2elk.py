@@ -522,32 +522,57 @@ def content_type_pdfs(args):
         parent_host=args['parent_host'],
         db=args['db']
     )
-
     if not DOWNLOAD_PDFS:
         return True
-
     url = args['url']
     base_filename = os.path.basename(urlparse(url).path)
-
     # Truncate long filenames (UTF-8 encoded) to avoid "filename too long" errors
     try:
         # Decode percent-encoded filename to get original characters
         decoded_name = unquote(base_filename)
     except Exception:
         decoded_name = base_filename
-
     # Truncate if longer than 50 chars and remove risky characters
     safe_name = re.sub(r"[^\w\-.]", "_", decoded_name)  # Keep only safe chars
     if len(safe_name) > 50:
         safe_name = safe_name[:47] + "..."
-
     url_hash = hashlib.sha256(url.encode()).hexdigest()
     unique_filename = f"{url_hash}-{safe_name}"
     filepath = os.path.join(PDFS_FOLDER, unique_filename)
-
     with open(filepath, "wb") as f:
         f.write(args['content'])
+    return True
 
+@function_for_content_type(content_type_doc_regex)
+def content_type_docs(args):
+    db_insert_if_new_url(
+        url=args['url'],
+        content_type=args['content_type'],
+        isopendir=False,
+        visited=True,
+        source='content_type_docs',
+        parent_host=args['parent_host'],
+        db=args['db']
+    )
+    if not DOWNLOAD_DOCS:
+        return True
+    url = args['url']
+    base_filename = os.path.basename(urlparse(url).path)
+    # Truncate long filenames (UTF-8 encoded) to avoid "filename too long" errors
+    try:
+        # Decode percent-encoded filename to get original characters
+        decoded_name = unquote(base_filename)
+    except Exception:
+        decoded_name = base_filename
+    # Truncate if longer than 50 chars and remove risky characters
+    safe_name = re.sub(r"[^\w\-.]", "_", decoded_name)  # Keep only safe chars
+    if len(safe_name) > 50:
+        safe_name = safe_name[:47] + "..."
+    url_hash = hashlib.sha256(url.encode()).hexdigest()
+    unique_filename = f"{url_hash}-{safe_name}"
+    filepath = os.path.join(DOCS_FOLDER, unique_filename)
+    with open(filepath, "wb") as f:
+        f.write(args['content'])
     return True
 
 @function_for_content_type(content_type_compressed_regex)
@@ -624,7 +649,7 @@ def get_page(url, driver, db):
 
                     try: 
                         content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
-                    except ValueError as e:  # 🛠 Catch specific Brotli decompression failure
+                    except ValueError as e:  # 🛠️ Catch specific Brotli decompression failure
                         if "BrotliDecompress failed" in str(e):
                             db_insert_if_new_url(url=url,visited=True,source='BrotliDecompressFailed',parent_host=parent_host,db=db)
                             continue
@@ -1170,6 +1195,10 @@ def db_create_database(initial_url, db):
                 "host_levels": {"type": "keyword"},
                 "directory_levels": {"type": "keyword"},
                 "host_levels": {"type": "keyword"},
+                "file_extension": {"type": "keyword"},
+                "has_query": {"type": "boolean"},
+                "query_variables": {"type": "keyword"},
+                "query_values": {"type": "keyword"},
                 **{
                     f"directory_level_{i+1}": {"type": "keyword"}
                     for i in range(MAX_DIR_LEVELS)
@@ -1194,7 +1223,12 @@ def db_create_database(initial_url, db):
         if not db.con.indices.exists(index=URLS_INDEX):
             db.con.indices.create(index=URLS_INDEX, body=urls_mapping)
             print("Created {} index.".format(URLS_INDEX))
-            db_insert_if_new_url(url=initial_url, source='db_create_database', parent_host=urlsplit(initial_url)[1], db=db)
+            db_insert_if_new_url(
+                    url=initial_url,
+                    source='db_create_database',
+                    parent_host=urlsplit(initial_url)[1],
+                    db=db
+                )
             print("Inserted initial url {}.".format(initial_url))
         return True
     except Exception as e:
@@ -1267,7 +1301,7 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
 
     except Exception as e:
         print(f"[FAST CRAWLER] Error processing {url}: {e}")
-
+    time.sleep(random.uniform(FAST_RANDOM_MIN_WAIT,FAST_RANDOM_MAX_WAIT))
 
 def run_fast_extension_pass(db, max_workers=MAX_FAST_WORKERS):
     shuffled_extensions = list(EXTENSION_MAP.items())
@@ -1320,12 +1354,12 @@ def run_fast_extension_pass(db, max_workers=MAX_FAST_WORKERS):
             except Exception as e:
                 print(f"[FAST CRAWLER] Error retrieving URLs for extension {extension} in bucket {random_bucket}: {e}")
 
-def is_valid_url(url: str) -> bool:
-    try:
-        parsed = urlparse(url)
-        return parsed.scheme in {"http", "https", "ftp"} and bool(parsed.netloc)
-    except Exception:
-        return False
+#def is_valid_url(url: str) -> bool:
+#    try:
+#        parsed = urlparse(url)
+#        return parsed.scheme in {"http", "https", "ftp"} and bool(parsed.netloc)
+#    except Exception:
+#        return False
 
 def remove_invalid_urls(db):
     """
@@ -1344,12 +1378,12 @@ def remove_invalid_urls(db):
             print(f"🧹 Deleted sanitized URL: -{pre_url}- inserting -{url}-")
             db_insert_if_new_url(url=url, visited=False, source="remove_invalid_urls",db=db)
             #db.es.delete(index=URLS_INDEX, id=doc['_id'])
-        if not is_valid_url(url):
-            print(f"Sanitized url continues to be invalid!!!!: {url}")
-            #db.es.delete(index=URLS_INDEX, id=doc['_id'])
             deleted += 1
+        #if not is_valid_url(url):
+        #    print(f"Sanitized url continues to be invalid!!!!: {url}")
+        #    #db.es.delete(index=URLS_INDEX, id=doc['_id'])
+        #    deleted += 1
     print(f"\n✅ Done. Total invalid URLs deleted: {deleted}")
-
 
 def remove_blocked_hosts_from_es_db(db):
     compiled_blocklist = [re.compile(pattern) for pattern in host_regex_block_list]

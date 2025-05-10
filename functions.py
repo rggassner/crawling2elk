@@ -1,6 +1,7 @@
 import random, hashlib, time, re, string, json
+import os
 from config import *
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlsplit, urlunsplit, unquote, parse_qs
 from datetime import datetime, timezone
 from elasticsearch import NotFoundError, RequestError
 from elasticsearch import Elasticsearch
@@ -32,8 +33,7 @@ class DatabaseConnection:
     def scroll(self, *args, **kwargs):
         return self.es.scroll(*args, **kwargs)
 
-#def sanitize_url(url, debug=True, skip_log_tags=['NORMALIZE_PATH_SLASHES','FINAL_NORMALIZE','FIX_NETLOC_IN_PATH','FIX_SCHEME_SLASHES','STRIP_WHITESPACE']):
-def sanitize_url(url, debug=True, skip_log_tags=None):
+def sanitize_url(url, debug=True, skip_log_tags=['FINAL_NORMALIZE','STRIP_WHITESPACE','NORMALIZE_PATH_SLASHES']):
     """
     Sanitize URLs by removing quotes, fixing common typos, and normalizing format.
     """
@@ -102,12 +102,7 @@ def sanitize_url(url, debug=True, skip_log_tags=None):
     log_change("STRIP_WHITESPACE", pre_sanitize, url)
     pre_sanitize = url
 
-    quote_patterns = [
-        r'^"([^"]*)"$',
-        r"^'([^']*)'",
-        r'^"([^"]*)',
-        r"^'([^']*)'$"
-    ]
+
     special_quote_pairs = [
         (r'^"(.*)"$', r'\1'),
         (r"^'(.*)'$", r'\1'),
@@ -116,10 +111,17 @@ def sanitize_url(url, debug=True, skip_log_tags=None):
         (r'^"(.*)″$', r'\1'),
     ]
 
-    for pattern in quote_patterns:
-        cleaned = re.sub(pattern, r'\1', url)
-        log_change("QUOTE_CLEAN", url, cleaned)
-        url = cleaned
+    #if applied to full url it removes more than it should. Evaluate in the future for hostname, port or schema
+    #quote_patterns = [
+    #    r'^"([^"]*)"$',
+    #    r"^'([^']*)'",
+    #    r'^"([^"]*)',
+    #    r"^'([^']*)'$"
+    #]
+    #for pattern in quote_patterns:
+    #    cleaned = re.sub(pattern, r'\1', url)
+    #    log_change("QUOTE_CLEAN", url, cleaned)
+    #    url = cleaned
 
     for pattern, replacement in special_quote_pairs:
         cleaned = re.sub(pattern, replacement, url)
@@ -159,7 +161,7 @@ def sanitize_url(url, debug=True, skip_log_tags=None):
         scheme = parsed.scheme.lower()
         netloc = clean_hostname_with_userinfo(parsed.netloc, scheme)
 
-        if not netloc and parsed.path.startswith('/'):
+        if not netloc and parsed.path.startswith('/') and scheme:
             parts = parsed.path.lstrip('/').split('/', 1)
             if parts and '.' in parts[0]:
                 netloc = clean_hostname_with_userinfo(parts[0], scheme)
@@ -211,6 +213,14 @@ def db_insert_if_new_url(url='', isopendir=None, visited=None, source='', conten
     host = urlsplit(url)[1]
     url = remove_jsessionid_with_semicolon(url)
     url = sanitize_url(url)
+    parsed = urlsplit(url)
+    query = parsed.query
+    has_query = bool(query)
+    query_dict = parse_qs(query)
+
+    query_variables = list(set(query_dict.keys()))
+    query_values = list(set(v for values in query_dict.values() for v in values))
+
     now_iso = datetime.now(timezone.utc).isoformat()
     doc_id = hash_url(url)
 
@@ -255,6 +265,20 @@ def db_insert_if_new_url(url='', isopendir=None, visited=None, source='', conten
             # Add levels to insert_only_fields
             insert_only_fields["host_levels"] = host_parts
             insert_only_fields["directory_levels"] = dir_parts
+
+            insert_only_fields["has_query"] = has_query
+            if query_variables:
+                insert_only_fields["query_variables"] = query_variables
+            if query_values:
+                insert_only_fields["query_values"] = query_values
+
+            # Extract file extension if present
+            path = unquote(urlsplit(url).path)
+            _, file_extension = os.path.splitext(path)
+            file_extension = file_extension.lower().lstrip('.') if file_extension else ''
+
+            if file_extension:
+                insert_only_fields['file_extension'] = file_extension
 
             for i, part in enumerate(reversed(host_parts[-MAX_HOST_LEVELS:])):
                 insert_only_fields[f"host_level_{i+1}"] = part
@@ -441,28 +465,30 @@ content_type_audio_regex=[
         r"^application/mp3$",
         r"^audio/x-mpegurl$",
         r"^audio/x-pn-realaudio$",
+        r"^application/vnd\.rn-realmedia$",
     ]
 
 content_type_compressed_regex =[
+        r"^multipart/x-zip$",
         r"^application/zip$",
+        r"^application/rar$",
         r"^application/gzip$",
+        r"^application/x-xz$",
+        r"^application/\.rar$",
         r"^application/\.zip$",
         r"^application/x-zip$",
+        r"^application/x-rar$",
+        r"^application/x-tar$",
         r"^application/x-gzip$",
         r"^application/x-bzip2$",
-        r"^application/x-zip-compressed$",
-        r"^application/x-zip-compressedcontent-length:",
-        r"^multipart/x-zip$",
-        r"^application/vnd\.adobe\.air-application-installer-package\+zip$",
-        r"^application/x-rar-compressed$",
-        r"^application/rar$",
-        r"^application/x-rar$",
-        r"^application/\.rar$",
         r"^application/x-tar-gz$",
-        r"^application/x-tar$",
-        r"^application/x-gtar-compressed$",
-        r"^application/x-xz$",
+        r"^application/x-compress$",
         r"^application/x-7z-compressed$",
+        r"^application/x-rar-compressed$",
+        r"^application/x-zip-compressed$",
+        r"^application/x-gtar-compressed$",
+        r"^application/x-zip-compressedcontent-length:",
+        r"^application/vnd\.adobe\.air-application-installer-package\+zip$",
     ]
 
 content_type_pdf_regex = [
@@ -512,24 +538,37 @@ content_type_image_regex = [
         r"^application/jpg$",        
     ]
 
+content_type_doc_regex = [
+        r"^application/vnd\.openxmlformats-officedocument\.wordprocessingml\.document$",
+        r"^application/vnd\.openxmlformats-officedocument\.wordprocessingml\.template$",
+        r"^application/docx$",
+        r"^application/doc$",
+        r"^application/vnd\.ms-word\.document\.12$",
+        r"^application/vnd\.oasis\.opendocument\.text$",
+        ]
+
 content_type_video_regex = [
         r"^video/mp4$",
         r"^video/ogg$",
         r"^video/f4v$",
-        r"^application/wmv$",
         r"^video/m2ts$",
         r"^video/webm$",
         r"^video/MP2T$",
         r"^video/mpeg$",
         r"^video/x-m4v$",
         r"^video/x-flv$",
-        r"^video/quicktime$",
         r"^video/x-ms-wmv$",
         r"^video/x-ms-asf$",
-        r"^video/x-msvideo$",
-        r"^video/x-matroska$",
-        r"^video/vnd\.dlna\.mpeg-tts$",
+        r"^application/ogg$",
+        r"^application/wmv$",
         r"^application/avi$",
+        r"^video/x-msvideo$",
+        r"^video/quicktime$",
+        r"^video/x-matroska$",
+        r"^application/x-mpegurl$",
+        r"^video/vnd\.dlna\.mpeg-tts$",
+        r"^application/vnd\.apple\.mpegurl$",
+        r"^application/vnd\.adobe\.flash\.movie$",
         ]
 
 content_type_plain_text_regex = [
@@ -545,7 +584,6 @@ content_type_plain_text_regex = [
         r"^text/json$",
         r"^text/yaml$",
         r"^text/x-js$",
-        r"^text/ascii$",
         r"^text/vcard$",
         r"^text/x-tex$",
         r"^text/plain$",
@@ -709,16 +747,13 @@ content_type_all_others_regex = [
         r"^application/\*$",
         r"^application/xml$",
         r"^application/x-j$",
-        r"^application/doc$",
         r"^application/xls$",
         r"^application/jwt$",
         r"^application/rtf$",
-        r"^application/ogg$",
         r"^application/csv$",
         r"^application/epub$",
         r"^application/node$",
         r"^application/xlsx$",
-        r"^application/docx$",
         r"^application/wasm$",
         r"^application/woff$",
         r"^application/mobi$",
@@ -740,6 +775,7 @@ content_type_all_others_regex = [
         r"^application/msword$",
         r"^application/x-doom$",
         r"^application/x-woff$",
+        r"^application/x-trash$",
         r"^application/msexcel$",
         r"^application/x-woff2$",
         r"^application/unknown$",
@@ -768,9 +804,9 @@ content_type_all_others_regex = [
         r"^application/atom\+xml$",
         r"^application/x-msexcel$",
         r"^application/pkix-cert$",
-        r"^application/x-mpegurl$",
         r"^application/font-woff$",
         r"^application/smil\+xml$",
+        r"^application/x-director$",
         r"^application/postscript$",
         r"^application/x-font-ttf$",
         r"^application/x-font-otf$",
@@ -832,7 +868,6 @@ content_type_all_others_regex = [
         r"^application/vnd\.ms-officetheme$",
         r"^application/vnd\.wv\.csp\+wbxml$",
         r"^application/x-ms-dos-executable$",
-        r"^application/vnd\.apple\.mpegurl$",
         r"^application/x-pkcs7-certificates$",
         r"^application/vnd\.lotus-screencam$",
         r"^application/vnd\.imgur\.v1\+json$",
@@ -843,13 +878,11 @@ content_type_all_others_regex = [
         r"^application/graphql-response\+json$",
         r"^application/x-research-info-systems$",
         r"^application/vnd\.mapbox-vector-tile$",
-        r"^application/vnd\.ms-word\.document\.12$",
         r"^application/vnd\.vimeo\.location\+json$",
         r"^application/opensearchdescription\+xml$",
         r"^application/vnd\.google-earth\.kml\+xml$",
         r"^application/vnd\.ms-excel\.openxmlformat$",
         r"^application/vnd\.android\.package-archive$",
-        r"^application/vnd\.oasis\.opendocument\.text$",
         r"^application/vnd\.vimeo\.currency\.json\+json$",
         r"^application/vnd\.vimeo\.marketplace\.skill\+json$",
         r"^application/vnd\.oasis\.opendocument\.spreadsheet$",
@@ -862,8 +895,6 @@ content_type_all_others_regex = [
         r"^application/vnd\.openxmlformats-officedocument\.spre$",
         r"^application/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet$",
         r"^application/vnd\.openxmlformats-officedocument\.presentationml\.slideshow",
-        r"^application/vnd\.openxmlformats-officedocument\.wordprocessingml\.document$",
-        r"^application/vnd\.openxmlformats-officedocument\.wordprocessingml\.template$",
         r"^application/vnd\.openxmlformats-officedocument\.presentationml\.presentation$",
         r"^applications/javascript$",
         r"^httpd/unix-directory$",
@@ -881,17 +912,29 @@ content_type_all_others_regex = [
     ]
 
 EXTENSION_MAP = {
-        ".midi": content_type_midi_regex,
-        ".mid": content_type_midi_regex,
-        ".zip": content_type_compressed_regex,
-        ".rar": content_type_compressed_regex,
-        ".gz": content_type_compressed_regex,
-        ".jpg": content_type_image_regex,
-        ".jpeg": content_type_image_regex,
-        ".png": content_type_image_regex,
-        ".gif": content_type_image_regex,
-        ".pdf": content_type_pdf_regex,
-        ".mp3": content_type_audio_regex,
-        ".mp4": content_type_video_regex,
-        ".wmv": content_type_video_regex,
+        ".midi" : content_type_midi_regex,
+        ".mid"  : content_type_midi_regex,
+        ".zip"  : content_type_compressed_regex,
+        ".bz2"  : content_type_compressed_regex,
+        ".lz"   : content_type_compressed_regex,
+        ".Z"    : content_type_compressed_regex,
+        ".rar"  : content_type_compressed_regex,
+        ".gz"   : content_type_compressed_regex,
+        ".jpg"  : content_type_image_regex,
+        ".jpeg" : content_type_image_regex,
+        ".png"  : content_type_image_regex,
+        ".gif"  : content_type_image_regex,
+        ".pdf"  : content_type_pdf_regex,
+        ".rm"   : content_type_audio_regex,
+        ".mp3"  : content_type_audio_regex,
+        ".wav"  : content_type_audio_regex,
+        ".flac" : content_type_audio_regex,
+        ".mp4"  : content_type_video_regex,
+        ".wmv"  : content_type_video_regex,
+        ".mkv"  : content_type_video_regex,
+        ".swf"  : content_type_video_regex,
+        ".ogv"  : content_type_video_regex,
+        ".mov"  : content_type_video_regex,
+        ".mpg"  : content_type_video_regex,
+        ".docx" : content_type_doc_regex,
     }

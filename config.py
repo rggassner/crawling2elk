@@ -36,6 +36,9 @@ AUDIOS_FOLDER='audios'
 DOWNLOAD_PDFS=False
 PDFS_FOLDER='pdfs'
 
+DOWNLOAD_DOCS=False
+DOCS_FOLDER='docs'
+
 DOWNLOAD_VIDEOS=False
 VIDEOS_FOLDER='videos'
 
@@ -65,7 +68,10 @@ EMBED_PORT="4443"
 HTTPS_EMBED='https://localhost:'+EMBED_PORT+'/embed.html?url='
 
 #How many async workers for each instance type
-MAX_FAST_WORKERS=4
+MAX_FAST_WORKERS=5
+FAST_RANDOM_MIN_WAIT=0
+FAST_RANDOM_MAX_WAIT=0
+
 MAX_SCANNER_WORKERS=1
 
 #Elasticsearch connection configuration
@@ -77,7 +83,7 @@ ELASTICSEARCH_CA_CERT_PATH=None
 ELASTICSEARCH_RANDOM_BUCKETS=20
 MAX_ES_RETRIES=10
 ES_RETRY_DELAY=1
-URLS_INDEX='urls'
+URLS_INDEX='crawler'
 
 #Word extraction
 EXTRACT_WORDS=True
@@ -88,11 +94,11 @@ WORDS_MIN_LEN=3
 WORDS_MAX_LEN=40
 WORDS_MAX_WORDS=24000
 
+#How many urls should each picking method return
 RANDOM_SITES_QUEUE=100
 
 MAX_DIR_LEVELS=7
 MAX_HOST_LEVELS=7
-
 
 #If we should or not save full html to the database
 EXTRACT_RAW_WEBCONTENT=True
@@ -101,7 +107,7 @@ EXTRACT_MIN_WEBCONTENT=True
 
 MAX_WEBCONTENT_SIZE=900000 #should be under 1 million for a default elastic search env
 #URL File should be one url per line
-URL_FILE='urls.txt'
+URL_FILE='sampled_urls.txt'
 
 #be_greedy = True - Save urls to database that might not work, since have not matched any regex.
 BE_GREEDY=False
@@ -139,7 +145,6 @@ RANDOM_PORT_CHANCE = 0.1
 SCAN_NETWORKS = [
     "0.0.0.0/0"
 ]
-
 
 #The scanner should avoid these networks
 NOSCAN_NETWORKS = [

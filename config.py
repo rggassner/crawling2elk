@@ -1,9 +1,10 @@
 #!/usr/bin/python3
 
-#INITIAL_URL='https://crawler-test.com/'
+# Used only in the first run
+# INITIAL_URL='https://crawler-test.com/'
 INITIAL_URL='https://crawler-test.com/'
 
-#Selenium config
+# Selenium config
 SELENIUM_WIDTH=1920
 SELENIUM_HEIGHT=1080
 USE_PROXY=False
@@ -25,6 +26,8 @@ MAX_DOWNLOAD_TIME = 120
 #How many iterations should the python script runs. This does not
 #apply to the wrapper, that makes it run continuously.
 ITERATIONS=10
+
+MAX_FILENAME_LENGTH = 255
 
 #What and where to save
 DOWNLOAD_MIDIS=True
@@ -68,7 +71,7 @@ EMBED_PORT="4443"
 HTTPS_EMBED='https://localhost:'+EMBED_PORT+'/embed.html?url='
 
 #How many async workers for each instance type
-MAX_FAST_WORKERS=5
+MAX_FAST_WORKERS=2
 FAST_RANDOM_MIN_WAIT=0
 FAST_RANDOM_MAX_WAIT=0
 
@@ -158,4 +161,5 @@ NOSCAN_NETWORKS = [
     "100.64.0.0/10",
     "169.254.0.0/16"
 ]
+
 

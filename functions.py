@@ -1,12 +1,17 @@
-import random, hashlib, time, re, string, json
+import hashlib
+import json
 import os
+import random
+import re
+import string
+import time
 from config import *
-from urllib.parse import urlsplit, urlunsplit, unquote, parse_qs
 from datetime import datetime, timezone
-from elasticsearch import NotFoundError, RequestError
-from elasticsearch import Elasticsearch
-from elasticsearch.exceptions import NotFoundError, RequestError
+from elasticsearch import NotFoundError, RequestError, Elasticsearch
 from elasticsearch import ConflictError
+from elasticsearch.exceptions import NotFoundError, RequestError
+from urllib.parse import urlsplit, urlunsplit, unquote, parse_qs
+
 
 class DatabaseConnection:
     def __init__(self):
@@ -455,6 +460,7 @@ content_type_audio_regex=[
         r"^audio/flac$",
         r"^audio/mpeg$",
         r"^audio/opus$",
+        r"^audio/x-m4a$",
         r"^audio/x-rpm$",
         r"^audio/x-wav$",
         r"^audio/x-flac$",
@@ -566,7 +572,9 @@ content_type_video_regex = [
         r"^video/quicktime$",
         r"^video/x-matroska$",
         r"^application/x-mpegurl$",
+        r"^application/vnd\.ms-asf$",
         r"^video/vnd\.dlna\.mpeg-tts$",
+        r"^application/x-shockwave-flash$",
         r"^application/vnd\.apple\.mpegurl$",
         r"^application/vnd\.adobe\.flash\.movie$",
         ]
@@ -580,17 +588,22 @@ content_type_plain_text_regex = [
         r"^text/csv$",
         r"^text/vtt$",
         r"^app/json$",
+        r"^text/x-c$",
         r"^text/x-sh$",
         r"^text/json$",
         r"^text/yaml$",
+        r"^text/x-go$",
         r"^text/x-js$",
         r"^text/vcard$",
         r"^text/x-tex$",
         r"^text/plain$",
+        r"^text/x-diff$",
         r"^text/x-perl$",
         r"^text/x-chdr$",
         r"^text/x-json$",
+        r"^text/x-csrc$",
         r"^text/turtle$",
+        r"^text/webloc$",
         r"^text/x-vcard$",
         r"^text/calendar$",
         r"^text/x-ndjson$",
@@ -598,6 +611,7 @@ content_type_plain_text_regex = [
         r"^text/uri-list$",
         r"^text/markdown$",
         r"^text/directory$",
+        r"^text/x-amzn-ion$",
         r"^text/x-vcalendar$",
         r"^text/x-component$",
         r"^application/text$",
@@ -619,19 +633,6 @@ content_type_plain_text_regex = [
         r"^application/x-amz-json-1\.1$",
         r"^application/jsoncharset=UTF-8$",
         r"^text/x-comma-separated-values$",
-        r"^application/speculationrules\+json$",
-        r"^application/vnd\.vimeo\.user\+json$",
-        r"^application/amazonui-streaming-json$",
-        r"^application/vnd.inveniordm\.v1\+json$",
-        r"^application/vnd\.maxmind\.com-city\+json$",
-        r"^application/vnd\.maxmind\.com-error\+json$",
-        r"^application/vnd\.radio-canada\.neuro\+json$",
-        r"^application/vnd\.vimeo\.profilevideo\+json$",
-        r"^application/vnd\.maxmind\.com-country\+json$",
-        r"^application/vnd\.maxmind\.com-insights\+json$",
-        r"^application/vnd\.vimeo\.profilesection\+json$",
-        r"^application/vnd\.contentful\.delivery\.v1\+json$",
-        r"^application/vnd\.spring-boot\.actuator\.v3\+json$",
     ]
 
 url_all_others_regex =[
@@ -740,11 +741,13 @@ content_type_all_others_regex = [
         r"^font/x-woff2$",
         r"^font/opentype$",
         r"^model/vnd\.mts$",
+        r"^model/step$",
         r"^text/css$",
         r"^text/x-unknown-content-type$",
         r"^text/plaincharset:",
         r"^text/javascript$",
         r"^application/\*$",
+        r"^application/js$",
         r"^application/xml$",
         r"^application/x-j$",
         r"^application/xls$",
@@ -763,6 +766,7 @@ content_type_all_others_regex = [
         r"^application/json$",
         r"^application/x-sh$",
         r"^application/font$",
+        r"^application/x-rpm$",
         r"^application/x-twb$",
         r"^application/x-msi$",
         r"^application/x-xar$",
@@ -856,13 +860,13 @@ content_type_all_others_regex = [
         r"^application/x-shared-scripts$",
         r"^application/x-java-jnlp-file$",
         r"^application/x-httpd-ea-php71$",
-        r"^application/x-shockwave-flash$",
         r"^application/vnd\.ogc\.wms_xml$",
         r"^application/x-apple-diskimage$",
         r"^application/x-chrome-extension$",
         r"^application/x-mobipocket-ebook$",
         r"^application/vnd\.1cbn\.v1+json$",
         r"^application/vnd\.ms-fontobject$",
+        r"^value=application/x-font-woff2$",
         r"^application/privatetempstorage$",
         r"^application/vnd\.ms-powerpoint$",
         r"^application/vnd\.ms-officetheme$",
@@ -871,18 +875,35 @@ content_type_all_others_regex = [
         r"^application/x-pkcs7-certificates$",
         r"^application/vnd\.lotus-screencam$",
         r"^application/vnd\.imgur\.v1\+json$",
-        r"^value=application/x-font-woff2$",
         r"^application/x-www-form-urlencoded$",
         r"^application/x-typekit-augmentation$",
         r"^application/x-unknown-content-type$",
         r"^application/graphql-response\+json$",
+        r"^application/speculationrules\+json$",
+        r"^application/vnd\.vimeo\.user\+json$",
         r"^application/x-research-info-systems$",
         r"^application/vnd\.mapbox-vector-tile$",
+        r"^application/amazonui-streaming-json$",
+        r"^application/vnd\.vimeo\.error\+json$",
+        r"^application/vnd.inveniordm\.v1\+json$",
+        r"^application/x-redhat-package-manager$",
         r"^application/vnd\.vimeo\.location\+json$",
         r"^application/opensearchdescription\+xml$",
+        r"^application/vnd\.maxmind\.com-city\+json$",
+        r"^application/vnd\.maxmind\.com-error\+json$",
+        r"^application/vnd\.radio-canada\.neuro\+json$",
+        r"^application/vnd\.vimeo\.profilevideo\+json$",
+        r"^application/vnd\.maxmind\.com-country\+json$",
+        r"^application/vnd\.maxmind\.com-insights\+json$",
+        r"^application/vnd\.vimeo\.profilesection\+json$",
+        r"^application/vnd\.contentful\.delivery\.v1\+json$",
+        r"^application/javascript,application/x-javascript$",
+        r"^application/vnd\.spring-boot\.actuator\.v3\+json$",
         r"^application/vnd\.google-earth\.kml\+xml$",
+        r"^application/vnd\.com\.amazon\.api\+json$",
         r"^application/vnd\.ms-excel\.openxmlformat$",
         r"^application/vnd\.android\.package-archive$",
+        r"^application/vnd\.disney\.error\.v1\.0\+json$",
         r"^application/vnd\.vimeo\.currency\.json\+json$",
         r"^application/vnd\.vimeo\.marketplace\.skill\+json$",
         r"^application/vnd\.oasis\.opendocument\.spreadsheet$",
@@ -911,30 +932,40 @@ content_type_all_others_regex = [
         r"^octet/stream$",
     ]
 
+#When creating a new content_type group, you'll have to change also the "predownload" in other function
 EXTENSION_MAP = {
         ".midi" : content_type_midi_regex,
         ".mid"  : content_type_midi_regex,
+        ".Mid"  : content_type_midi_regex,
         ".zip"  : content_type_compressed_regex,
         ".bz2"  : content_type_compressed_regex,
         ".lz"   : content_type_compressed_regex,
         ".Z"    : content_type_compressed_regex,
         ".rar"  : content_type_compressed_regex,
         ".gz"   : content_type_compressed_regex,
+        ".7z"   : content_type_compressed_regex,
         ".jpg"  : content_type_image_regex,
+        ".JPG"  : content_type_image_regex,
         ".jpeg" : content_type_image_regex,
         ".png"  : content_type_image_regex,
+        ".PNG"  : content_type_image_regex,
         ".gif"  : content_type_image_regex,
         ".pdf"  : content_type_pdf_regex,
         ".rm"   : content_type_audio_regex,
         ".mp3"  : content_type_audio_regex,
         ".wav"  : content_type_audio_regex,
         ".flac" : content_type_audio_regex,
+        ".m4a"  : content_type_audio_regex,
         ".mp4"  : content_type_video_regex,
         ".wmv"  : content_type_video_regex,
         ".mkv"  : content_type_video_regex,
         ".swf"  : content_type_video_regex,
+        ".asf"  : content_type_video_regex,
         ".ogv"  : content_type_video_regex,
         ".mov"  : content_type_video_regex,
+        ".flv"  : content_type_video_regex,
         ".mpg"  : content_type_video_regex,
+        ".webm" : content_type_video_regex,
         ".docx" : content_type_doc_regex,
     }
+

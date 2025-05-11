@@ -1,47 +1,51 @@
 #!venv/bin/python3
-import os, re, time, hashlib, signal, random, argparse, urllib3, warnings, bs4.builder,string
+import absl.logging
+import argparse
+import bs4.builder
+import fcntl
+import hashlib
+import logging
 import numpy as np
-import requests, subprocess
+import os
+import random
+import re
+import requests
+import signal
+import string
+import subprocess
+import time
+import urllib3
+import warnings
+from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import *
+from datetime import datetime, timezone
+from elasticsearch import helpers, ConflictError
+from fake_useragent import UserAgent
+from functions import *
+from io import BytesIO
+from pathlib import PurePosixPath
+from PIL import Image, UnidentifiedImageError
+from seleniumwire import webdriver
+from seleniumwire.utils import decode
+from tornado import httpserver, ioloop, web
+from urllib.parse import unquote, urljoin, urlparse, urlsplit
+from urllib3.exceptions import InsecureRequestWarning
+
 if CATEGORIZE_NSFW:
     import opennsfw2 as n2
     model = n2.make_open_nsfw_model()
-from functions import *
-from bs4 import BeautifulSoup
-from bs4 import MarkupResemblesLocatorWarning
-from urllib.parse import urlsplit
-from seleniumwire import webdriver
-from fake_useragent import UserAgent
-from seleniumwire.utils import decode
-from urllib.parse import unquote,urljoin,urlparse
-from pathlib import PurePosixPath
-import absl.logging
+
 absl.logging.set_verbosity('error')
-from PIL import Image, UnidentifiedImageError
-from io import BytesIO
-from datetime import datetime, timezone
-from urllib3.exceptions import InsecureRequestWarning
-from collections import Counter
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 warnings.filterwarnings("ignore", category=Warning, message=".*verify_certs=False is insecure.*")
 warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-import logging
-from elasticsearch import helpers
-from elasticsearch import ConflictError
-
-from tornado import httpserver, ioloop, web
-import fcntl
-
-
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
 
 url_functions = []
 content_type_functions = []
-LOCK_FILE = "/tmp/my_crawler_instance.lock"
 lock_file = None  # Global reference to prevent garbage collection
-
 
 ##used to generate wordlist
 soup_tag_blocklist = [
@@ -411,65 +415,65 @@ def content_type_midis(args):
         parent_host=args['parent_host'],
         db=args['db']
     )
-
     if not DOWNLOAD_MIDIS:
         return True
-
     url = args['url']
     base_filename = os.path.basename(urlparse(url).path)
-
-    # Truncate long filenames (UTF-8 encoded) to avoid "filename too long" errors
     try:
-        # Decode percent-encoded filename to get original characters
         decoded_name = unquote(base_filename)
     except Exception:
         decoded_name = base_filename
-
-    # Truncate if longer than 50 chars and remove risky characters
-    safe_name = re.sub(r"[^\w\-.]", "_", decoded_name)  # Keep only safe chars
-    if len(safe_name) > 50:
-        safe_name = safe_name[:47] + "..."
-
+    # Separate extension (e.g., ".pdf")
+    name_part, ext = os.path.splitext(decoded_name)
+    # Sanitize both parts
+    name_part = re.sub(r"[^\w\-.]", "_", name_part)
+    ext = re.sub(r"[^\w\-.]", "_", ext)
+    # Create URL hash prefix (always fixed length)
     url_hash = hashlib.sha256(url.encode()).hexdigest()
-    unique_filename = f"{url_hash}-{safe_name}"
-    filepath = os.path.join(MIDIS_FOLDER, unique_filename)
-
+    # Max length for entire filename (255) minus hash + dash + extension + safety margin
+    max_name_length = MAX_FILENAME_LENGTH - len(url_hash) - 1 - len(ext)
+    if len(name_part) > max_name_length:
+        name_part = name_part[:max_name_length - 3] + "..."
+    safe_filename = f"{url_hash}-{name_part}{ext}"
+    filepath = os.path.join(MIDIS_FOLDER, safe_filename)
     with open(filepath, "wb") as f:
         f.write(args['content'])
-
     return True
 
 @function_for_content_type(content_type_audio_regex)
 def content_type_audios(args):
-    if DOWNLOAD_AUDIOS:
-        url = args['url']
-        try:
-            # Decode percent-encoded filename to get original characters
-            decoded_name = unquote(os.path.basename(urlparse(url).path))
-        except Exception:
-            decoded_name = os.path.basename(urlparse(url).path)
-
-        # Remove characters that can cause problems and truncate if too long
-        safe_name = re.sub(r"[^\w\-.]", "_", decoded_name)
-        if len(safe_name) > 50:
-            safe_name = safe_name[:47] + "..."
-
-        url_hash = hashlib.sha256(url.encode()).hexdigest()
-        unique_filename = f"{url_hash}-{safe_name}"
-        filepath = os.path.join(AUDIOS_FOLDER, unique_filename)
-
-        with open(filepath, "wb") as f:
-            f.write(args['content'])
-
     db_insert_if_new_url(
         url=args['url'],
         content_type=args['content_type'],
-        source='content_type_audios',
         isopendir=False,
         visited=True,
+        source='content_type_audios',
         parent_host=args['parent_host'],
         db=args['db']
     )
+    if not DOWNLOAD_AUDIOS:
+        return True
+    url = args['url']
+    base_filename = os.path.basename(urlparse(url).path)
+    try:
+        decoded_name = unquote(base_filename)
+    except Exception:
+        decoded_name = base_filename
+    # Separate extension (e.g., ".pdf")
+    name_part, ext = os.path.splitext(decoded_name)
+    # Sanitize both parts
+    name_part = re.sub(r"[^\w\-.]", "_", name_part)
+    ext = re.sub(r"[^\w\-.]", "_", ext)
+    # Create URL hash prefix (always fixed length)
+    url_hash = hashlib.sha256(url.encode()).hexdigest()
+    # Max length for entire filename (255) minus hash + dash + extension + safety margin
+    max_name_length = MAX_FILENAME_LENGTH - len(url_hash) - 1 - len(ext)
+    if len(name_part) > max_name_length:
+        name_part = name_part[:max_name_length - 3] + "..."
+    safe_filename = f"{url_hash}-{name_part}{ext}"
+    filepath = os.path.join(AUDIOS_FOLDER, safe_filename)
+    with open(filepath, "wb") as f:
+        f.write(args['content'])
     return True
 
 @function_for_content_type(content_type_video_regex)
@@ -483,32 +487,29 @@ def content_type_videos(args):
         parent_host=args['parent_host'],
         db=args['db']
     )
-
     if not DOWNLOAD_VIDEOS:
         return True
-
     url = args['url']
     base_filename = os.path.basename(urlparse(url).path)
-
-    # Truncate long filenames (UTF-8 encoded) to avoid "filename too long" errors
     try:
-        # Decode percent-encoded filename to get original characters
         decoded_name = unquote(base_filename)
     except Exception:
         decoded_name = base_filename
-
-    # Truncate if longer than 50 chars and remove risky characters
-    safe_name = re.sub(r"[^\w\-.]", "_", decoded_name)  # Keep only safe chars
-    if len(safe_name) > 50:
-        safe_name = safe_name[:47] + "..."
-
+    # Separate extension (e.g., ".pdf")
+    name_part, ext = os.path.splitext(decoded_name)
+    # Sanitize both parts
+    name_part = re.sub(r"[^\w\-.]", "_", name_part)
+    ext = re.sub(r"[^\w\-.]", "_", ext)
+    # Create URL hash prefix (always fixed length)
     url_hash = hashlib.sha256(url.encode()).hexdigest()
-    unique_filename = f"{url_hash}-{safe_name}"
-    filepath = os.path.join(VIDEOS_FOLDER, unique_filename)
-
+    # Max length for entire filename (255) minus hash + dash + extension + safety margin
+    max_name_length = MAX_FILENAME_LENGTH - len(url_hash) - 1 - len(ext)
+    if len(name_part) > max_name_length:
+        name_part = name_part[:max_name_length - 3] + "..."
+    safe_filename = f"{url_hash}-{name_part}{ext}"
+    filepath = os.path.join(VIDEOS_FOLDER, safe_filename)
     with open(filepath, "wb") as f:
         f.write(args['content'])
-
     return True
 
 @function_for_content_type(content_type_pdf_regex)
@@ -526,19 +527,23 @@ def content_type_pdfs(args):
         return True
     url = args['url']
     base_filename = os.path.basename(urlparse(url).path)
-    # Truncate long filenames (UTF-8 encoded) to avoid "filename too long" errors
     try:
-        # Decode percent-encoded filename to get original characters
         decoded_name = unquote(base_filename)
     except Exception:
         decoded_name = base_filename
-    # Truncate if longer than 50 chars and remove risky characters
-    safe_name = re.sub(r"[^\w\-.]", "_", decoded_name)  # Keep only safe chars
-    if len(safe_name) > 50:
-        safe_name = safe_name[:47] + "..."
+    # Separate extension (e.g., ".pdf")
+    name_part, ext = os.path.splitext(decoded_name)
+    # Sanitize both parts
+    name_part = re.sub(r"[^\w\-.]", "_", name_part)
+    ext = re.sub(r"[^\w\-.]", "_", ext)
+    # Create URL hash prefix (always fixed length)
     url_hash = hashlib.sha256(url.encode()).hexdigest()
-    unique_filename = f"{url_hash}-{safe_name}"
-    filepath = os.path.join(PDFS_FOLDER, unique_filename)
+    # Max length for entire filename (255) minus hash + dash + extension + safety margin
+    max_name_length = MAX_FILENAME_LENGTH - len(url_hash) - 1 - len(ext)
+    if len(name_part) > max_name_length:
+        name_part = name_part[:max_name_length - 3] + "..."
+    safe_filename = f"{url_hash}-{name_part}{ext}"
+    filepath = os.path.join(PDFS_FOLDER, safe_filename)
     with open(filepath, "wb") as f:
         f.write(args['content'])
     return True
@@ -558,19 +563,23 @@ def content_type_docs(args):
         return True
     url = args['url']
     base_filename = os.path.basename(urlparse(url).path)
-    # Truncate long filenames (UTF-8 encoded) to avoid "filename too long" errors
     try:
-        # Decode percent-encoded filename to get original characters
         decoded_name = unquote(base_filename)
     except Exception:
         decoded_name = base_filename
-    # Truncate if longer than 50 chars and remove risky characters
-    safe_name = re.sub(r"[^\w\-.]", "_", decoded_name)  # Keep only safe chars
-    if len(safe_name) > 50:
-        safe_name = safe_name[:47] + "..."
+    # Separate extension (e.g., ".pdf")
+    name_part, ext = os.path.splitext(decoded_name)
+    # Sanitize both parts
+    name_part = re.sub(r"[^\w\-.]", "_", name_part)
+    ext = re.sub(r"[^\w\-.]", "_", ext)
+    # Create URL hash prefix (always fixed length)
     url_hash = hashlib.sha256(url.encode()).hexdigest()
-    unique_filename = f"{url_hash}-{safe_name}"
-    filepath = os.path.join(DOCS_FOLDER, unique_filename)
+    # Max length for entire filename (255) minus hash + dash + extension + safety margin
+    max_name_length = MAX_FILENAME_LENGTH - len(url_hash) - 1 - len(ext)
+    if len(name_part) > max_name_length:
+        name_part = name_part[:max_name_length - 3] + "..."
+    safe_filename = f"{url_hash}-{name_part}{ext}"
+    filepath = os.path.join(DOCS_FOLDER, safe_filename)
     with open(filepath, "wb") as f:
         f.write(args['content'])
     return True
@@ -586,32 +595,29 @@ def content_type_compresseds(args):
         parent_host=args['parent_host'],
         db=args['db']
     )
-
     if not DOWNLOAD_COMPRESSEDS:
         return True
-
     url = args['url']
     base_filename = os.path.basename(urlparse(url).path)
-
-    # Truncate long filenames (UTF-8 encoded) to avoid "filename too long" errors
     try:
-        # Decode percent-encoded filename to get original characters
         decoded_name = unquote(base_filename)
     except Exception:
         decoded_name = base_filename
-
-    # Truncate if longer than 50 chars and remove risky characters
-    safe_name = re.sub(r"[^\w\-.]", "_", decoded_name)  # Keep only safe chars
-    if len(safe_name) > 50:
-        safe_name = safe_name[:47] + "..."
-
+    # Separate extension (e.g., ".pdf")
+    name_part, ext = os.path.splitext(decoded_name)
+    # Sanitize both parts
+    name_part = re.sub(r"[^\w\-.]", "_", name_part)
+    ext = re.sub(r"[^\w\-.]", "_", ext)
+    # Create URL hash prefix (always fixed length)
     url_hash = hashlib.sha256(url.encode()).hexdigest()
-    unique_filename = f"{url_hash}-{safe_name}"
-    filepath = os.path.join(COMPRESSEDS_FOLDER, unique_filename)
-
+    # Max length for entire filename (255) minus hash + dash + extension + safety margin
+    max_name_length = MAX_FILENAME_LENGTH - len(url_hash) - 1 - len(ext)
+    if len(name_part) > max_name_length:
+        name_part = name_part[:max_name_length - 3] + "..."
+    safe_filename = f"{url_hash}-{name_part}{ext}"
+    filepath = os.path.join(COMPRESSEDS_FOLDER, safe_filename)
     with open(filepath, "wb") as f:
         f.write(args['content'])
-
     return True
 
 @function_for_content_type(content_type_all_others_regex)
@@ -1266,6 +1272,7 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
                 found = True
 
                 needs_download = (
+                    (function.__name__ == "content_type_docs" and DOWNLOAD_DOCS) or
                     (function.__name__ == "content_type_pdfs" and DOWNLOAD_PDFS) or
                     (function.__name__ == "content_type_compresseds" and DOWNLOAD_COMPRESSEDS) or
                     (function.__name__ == "content_type_audios" and DOWNLOAD_AUDIOS) or

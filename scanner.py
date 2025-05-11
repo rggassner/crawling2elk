@@ -1,18 +1,24 @@
 #! venv/bin/python
-import asyncio, aiohttp
-import random
-import warnings
-import urllib3
+import aiohttp
 import argparse
-from ipaddress import IPv4Address, IPv4Network
-from config import *
-from functions import *
-import ssl
+import asyncio
+import random
 import re
+import ssl
+import urllib3
+import warnings
+from config import *
 from fake_useragent import UserAgent
+from functions import *
+from ipaddress import IPv4Address, IPv4Network
 from urllib3.exceptions import InsecureRequestWarning
+
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
-warnings.filterwarnings("ignore", category=Warning, message=".*verify_certs=False is insecure.*")
+warnings.filterwarnings(
+        "ignore",
+        category=Warning,
+        message=".*verify_certs=False is insecure.*"
+    )
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
@@ -179,4 +185,3 @@ if __name__ == "__main__":
     ip_list = generate_random_ips(ip_count,include_networks=SCAN_NETWORKS,exclude_networks=NOSCAN_NETWORKS)
     asyncio.run(scan_ips(ip_list, concurrency, args.verbose,db=db))
     print("Scan completed.")
-

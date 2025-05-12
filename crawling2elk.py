@@ -39,7 +39,10 @@ if CATEGORIZE_NSFW:
 
 absl.logging.set_verbosity('error')
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
-warnings.filterwarnings("ignore", category=Warning, message=".*verify_certs=False is insecure.*")
+warnings.filterwarnings(
+        "ignore",
+        category=Warning,
+        message=".*verify_certs=False is insecure.*")
 warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -47,7 +50,7 @@ url_functions = []
 content_type_functions = []
 lock_file = None  # Global reference to prevent garbage collection
 
-##used to generate wordlist
+# Used to generate wordlist
 soup_tag_blocklist = [
     "[document]",
     "noscript",
@@ -655,7 +658,7 @@ def get_page(url, driver, db):
 
                     try: 
                         content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
-                    except ValueError as e:  # 🛠️ Catch specific Brotli decompression failure
+                    except ValueError as e:  # 🛠 Catch specific Brotli decompression failure
                         if "BrotliDecompress failed" in str(e):
                             db_insert_if_new_url(url=url,visited=True,source='BrotliDecompressFailed',parent_host=parent_host,db=db)
                             continue
@@ -690,7 +693,6 @@ def get_page(url, driver, db):
                                 function({'url': url, 'visited': True, 'content_type': content_type, 
                                           'content': content, 'source': 'get_page', 'words': '', 
                                           'parent_host': parent_host, 'db': db})
-                                continue
                         if not found:
                             print(f"UNKNOWN type -{url}- -{content_type}-")
         #force update on main url
@@ -1242,7 +1244,6 @@ def db_create_database(initial_url, db):
         return False
 
 def fast_extension_crawler(url, extension, content_type_patterns, db):
-    print('url {}'.format(url))
     headers = {"User-Agent": UserAgent().random}
     try:
         head_resp = requests.head(url, timeout=(10, 10), allow_redirects=True, verify=False, headers=headers)
@@ -1251,9 +1252,12 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
                              source='fast_extension_crawler.head.exception', db=db)
         return
 
-    if not (200 <= head_resp.status_code < 300):
+    if (400 <= head_resp.status_code < 500):
+        db_insert_if_new_url(url=url, visited=True, words='', min_webcontent='', raw_webcontent='', source='fast_extension_crawler.head.status_code_4xx', db=db)
+    elif not (200 <= head_resp.status_code < 300):
         return
-
+    
+    print('url {} {}'.format(head_resp.status_code, url))
     content_type = head_resp.headers.get("Content-Type", "").lower().split(";")[0].strip()
     if not any(re.match(pattern, content_type) for pattern in content_type_patterns):
         return
@@ -1473,8 +1477,9 @@ def main():
         time.sleep(1)  # Give HTTPS server a head start
         print("Instance 1: And now some housekeeping. Removing urls from hosts that are blocklisted and should be removed.")
         remove_blocked_hosts_from_es_db(db)
-        print("Instance 1: Deleting invalid urls.")
-        remove_invalid_urls(db)
+        if LOOK_FOR_INVALID_URLS:
+            print("Instance 1: Deleting invalid urls.")
+            remove_invalid_urls(db)
         print("Instance 1: Let's go full crawler mode.")
         crawler(db)
     elif instance == 2:

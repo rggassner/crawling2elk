@@ -5,28 +5,37 @@
 INITIAL_URL='https://crawler-test.com/'
 
 # Selenium config
-SELENIUM_WIDTH=1920
-SELENIUM_HEIGHT=1080
-USE_PROXY=False
-PROXY_HOST='http://10.20.10.19:8123'
-#When the url is for a document, where will it be stored
-#This configuration does not affect the other download configuration
-#below
-DIRECT_LINK_DOWNLOAD_FOLDER='/dev/null'
-BLOCK_CSS=False
-#This makes selenium a bit faster if enabled but might make it detectable
+SELENIUM_WIDTH = 1920
+SELENIUM_HEIGHT = 1080
+USE_PROXY = False
+PROXY_HOST = 'http://10.20.10.19:8123'
+
+# When the url is for a document, where will it be stored.
+# This configuration does not affect the other download configuration
+# below
+DIRECT_LINK_DOWNLOAD_FOLDER = '/dev/null'
+BLOCK_CSS = False
+
+# This makes selenium a bit faster if enabled but might make it detectable
 PERFORMANCE_OPTIMIZED=False
 FORCE_IMAGE_LOAD=False
 
-#How long will it  wait until consider the url is not responding
-#This will deal with pages asking for basic authentication, and
-#streaming urls that never ends.
+# This option only makes sense to be activated when you have an external
+# script packing data to database, since all crawler data is already 
+# filtered while urls are entering.
+LOOK_FOR_INVALID_URLS = False
+
+# How long will it  wait until consider the url is not responding
+# This will deal with pages asking for basic authentication, and
+# streaming urls that never ends.
 MAX_DOWNLOAD_TIME = 120
 
-#How many iterations should the python script runs. This does not
-#apply to the wrapper, that makes it run continuously.
+# How many iterations should the python script runs. This does not
+# apply to the wrapper, that makes it run continuously.
 ITERATIONS=10
 
+# Files won't be longer than MAX_FILENAME_LENGTH in disk. If it happens
+# name will be trunkated, but original extensions are kept.
 MAX_FILENAME_LENGTH = 255
 
 #What and where to save

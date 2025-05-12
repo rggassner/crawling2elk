@@ -1,9 +1,9 @@
-import hashlib
-import json
-import os
-import random
-import re
-import string
+import hashlib                                                                                                       
+import json                                                                                                          
+import os                                                                                                            
+import random                                                                                                        
+import re                                                                                                            
+import string                                                                                                        
 import time
 from config import *
 from datetime import datetime, timezone
@@ -38,9 +38,16 @@ class DatabaseConnection:
     def scroll(self, *args, **kwargs):
         return self.es.scroll(*args, **kwargs)
 
-def sanitize_url(url, debug=True, skip_log_tags=['FINAL_NORMALIZE','STRIP_WHITESPACE','NORMALIZE_PATH_SLASHES']):
+
+def sanitize_url(
+        url,
+        debug=True,
+        skip_log_tags=['FINAL_NORMALIZE',
+                       'STRIP_WHITESPACE',
+                       'NORMALIZE_PATH_SLASHES']):
     """
-    Sanitize URLs by removing quotes, fixing common typos, and normalizing format.
+    Sanitize URLs by removing quotes, fixing common typos,
+    and normalizing format.
     """
     if skip_log_tags is None:
         skip_log_tags = set()
@@ -115,18 +122,6 @@ def sanitize_url(url, debug=True, skip_log_tags=['FINAL_NORMALIZE','STRIP_WHITES
         (r'^\u2018(.*)\u2019$', r'\1'),
         (r'^"(.*)″$', r'\1'),
     ]
-
-    #if applied to full url it removes more than it should. Evaluate in the future for hostname, port or schema
-    #quote_patterns = [
-    #    r'^"([^"]*)"$',
-    #    r"^'([^']*)'",
-    #    r'^"([^"]*)',
-    #    r"^'([^']*)'$"
-    #]
-    #for pattern in quote_patterns:
-    #    cleaned = re.sub(pattern, r'\1', url)
-    #    log_change("QUOTE_CLEAN", url, cleaned)
-    #    url = cleaned
 
     for pattern, replacement in special_quote_pairs:
         cleaned = re.sub(pattern, replacement, url)
@@ -457,6 +452,7 @@ content_type_audio_regex=[
         r"^audio/mp4$",
         r"^audio/wav$",
         r"^audio/MP2T$",
+        r"^audio/webm$",
         r"^audio/flac$",
         r"^audio/mpeg$",
         r"^audio/opus$",
@@ -471,6 +467,8 @@ content_type_audio_regex=[
         r"^application/mp3$",
         r"^audio/x-mpegurl$",
         r"^audio/x-pn-realaudio$",
+        r"^application/octetstream$",
+        r"^application/octet-stream$",
         r"^application/vnd\.rn-realmedia$",
     ]
 
@@ -489,6 +487,8 @@ content_type_compressed_regex =[
         r"^application/x-bzip2$",
         r"^application/x-tar-gz$",
         r"^application/x-compress$",
+        r"^application/octetstream$",
+        r"^application/octet-stream$",
         r"^application/x-7z-compressed$",
         r"^application/x-rar-compressed$",
         r"^application/x-zip-compressed$",
@@ -538,6 +538,7 @@ content_type_image_regex = [
         r"^image/x-xbitmap$",        
         r"^image/x-photoshop$",         
         r"^image/x-coreldraw$",        
+        r"^image/x-cmu-raster$",
         r"^image/vnd\.wap\.wbmp$",
         r"^image/x\.fb\.keyframes$",        
         r"^image/vnd\.microsoft\.icon$",
@@ -568,10 +569,13 @@ content_type_video_regex = [
         r"^application/ogg$",
         r"^application/wmv$",
         r"^application/avi$",
+        r"^application/mp4$",
         r"^video/x-msvideo$",
         r"^video/quicktime$",
         r"^video/x-matroska$",
         r"^application/x-mpegurl$",
+        r"^application/octetstream$",
+        r"^application/octet-stream$",
         r"^application/vnd\.ms-asf$",
         r"^video/vnd\.dlna\.mpeg-tts$",
         r"^application/x-shockwave-flash$",
@@ -621,6 +625,7 @@ content_type_plain_text_regex = [
         r"^application/ld\+json$",
         r"^application/ion\+json$",
         r"^application/hal\+json$",
+        r"^application/json,charset=",
         r"^application/stream\+json$",
         r"^application/problem\+json$",
         r"^text/0\.4/hammer\.min\.js$",
@@ -728,6 +733,7 @@ content_type_all_others_regex = [
         r"^\*/\*$",
         r"^woff2$",
         r"^unknown$",
+        r"^unknown/unknown$",
         r"^font/ttf$",
         r"^font/otf$",
         r"^font/woff$",
@@ -754,6 +760,7 @@ content_type_all_others_regex = [
         r"^application/jwt$",
         r"^application/rtf$",
         r"^application/csv$",
+        r"^application/ttf$",
         r"^application/epub$",
         r"^application/node$",
         r"^application/xlsx$",
@@ -770,6 +777,7 @@ content_type_all_others_regex = [
         r"^application/x-twb$",
         r"^application/x-msi$",
         r"^application/x-xar$",
+        r"^application/x-shar$",
         r"^application/x-ruby$",
         r"^application/x-frpc$",
         r"^application/x-tgif$",
@@ -799,6 +807,7 @@ content_type_all_others_regex = [
         r"^application/x-subrip$",
         r"^application/x-bibtex$",
         r"^application/pkix-crl$",
+        r"^application/geo\+json$",
         r"^application/font-sfnt$",
         r"^application/ttml\+xml$",
         r"^application/xslt\+xml$",
@@ -837,6 +846,7 @@ content_type_all_others_regex = [
         r"^application/octet-stream$",
         r"^application/vnd\.ms-word$",
         r"^application/x-executable$",
+        r"^application/marcxml\+xml$",
         r"^application/x-base64-frpc$",
         r"^application/pgp-signature$",
         r"^application/x-ms-manifest$",
@@ -860,6 +870,7 @@ content_type_all_others_regex = [
         r"^application/x-shared-scripts$",
         r"^application/x-java-jnlp-file$",
         r"^application/x-httpd-ea-php71$",
+        r"^Content-Type:application/json$",
         r"^application/vnd\.ogc\.wms_xml$",
         r"^application/x-apple-diskimage$",
         r"^application/x-chrome-extension$",
@@ -875,7 +886,9 @@ content_type_all_others_regex = [
         r"^application/x-pkcs7-certificates$",
         r"^application/vnd\.lotus-screencam$",
         r"^application/vnd\.imgur\.v1\+json$",
+        r"^application/vnd\.adobe\.dex\+json$",
         r"^application/x-www-form-urlencoded$",
+        r"^application/vnd\.solid-v1\.0\+json$",
         r"^application/x-typekit-augmentation$",
         r"^application/x-unknown-content-type$",
         r"^application/graphql-response\+json$",
@@ -965,6 +978,7 @@ EXTENSION_MAP = {
         ".mov"  : content_type_video_regex,
         ".flv"  : content_type_video_regex,
         ".mpg"  : content_type_video_regex,
+        ".mpeg" : content_type_video_regex,
         ".webm" : content_type_video_regex,
         ".docx" : content_type_doc_regex,
     }

@@ -37,21 +37,26 @@ def load_nmap_services(file_path):
                 ports[int(port)] = probability
     return ports
 
+
 def get_http_or_https():
     return random.choices(["http", "https"], weights=[65, 35], k=1)[0]
 
+
 def generate_random_port(ports, full_range=(1, 65535)):
-    """Generate a random port with weighted probabilities."""
-    """https://scottbrownconsulting.com/2018/11/nmap-top-ports-frequencies-study/"""
-    """LZR: Identifying Unexpected Internet Services"""
-    """https://arxiv.org/pdf/2301.04841"""
+    """
+    Generate a random port with weighted probabilities
+    https://scottbrownconsulting.com/2018/11/nmap-top-ports-frequencies-study/
+    LZR: Identifying Unexpected Internet Services
+    https://arxiv.org/pdf/2301.04841
+    """
     # Get all ports and their weights
     known_ports = list(ports.keys())
     known_weights = list(ports.values())
 
     # Assign very small weights to ports with 0.000000
     min_known_weight = min(w for w in known_weights if w > 0)
-    adjusted_weights = [w if w > 0 else min_known_weight / 10 for w in known_weights]
+    adjusted_weights = [
+            w if w > 0 else min_known_weight / 10 for w in known_weights]
 
     # Add ports not in the known list with even smaller probabilities
     all_ports = list(range(full_range[0], full_range[1] + 1))
@@ -185,3 +190,4 @@ if __name__ == "__main__":
     ip_list = generate_random_ips(ip_count,include_networks=SCAN_NETWORKS,exclude_networks=NOSCAN_NETWORKS)
     asyncio.run(scan_ips(ip_list, concurrency, args.verbose,db=db))
     print("Scan completed.")
+

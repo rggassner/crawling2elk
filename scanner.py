@@ -89,7 +89,10 @@ async def check_http(ip, port, protocol, verbose=False):
     ssl_context.verify_mode = ssl.CERT_NONE
     try:
         async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(url, timeout=5, ssl=ssl_context, allow_redirects=True) as response:
+            async with session.get(
+                    url, timeout=5,
+                    ssl=ssl_context,
+                    allow_redirects=True) as response:
                 content = await response.text()
                 http_code = response.status
                 return http_code

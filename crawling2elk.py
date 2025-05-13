@@ -63,21 +63,24 @@ soup_tag_blocklist = [
     "style",
 ]
 
-## Verify if host is in a blocklist.
+
+# Verify if host is in a blocklist.
 def is_host_block_listed(url):
     for regex in host_regex_block_list:
         if re.search(regex, url, flags=re.I | re.U):
             return True
     return False
 
-## Verify if url is in a blocklist.
+
+# Verify if url is in a blocklist.
 def is_url_block_listed(url):
     for regex in url_regex_block_list:
         if re.search(regex, url, flags=re.I | re.U):
             return True
     return False
 
-## Verify if url is in a allowlist.
+
+# Verify if url is in a allowlist.
 def is_host_allow_listed(url):
     for regex in host_regex_allow_list:
         if re.search(regex, url, flags=re.I | re.U):
@@ -200,8 +203,8 @@ def function_for_url(regexp_list):
         return f
     return get_url_function
 
-## url unsafe {}|\^~[]`
-## regex no need to escape '!', '"', '%', "'", ',', '/', ':', ';', '<', '=', '>', '@', and "`"
+# url unsafe {}|\^~[]`
+# regex no need to escape '!', '"', '%', "'", ',', '/', ':', ';', '<', '=', '>', '@', and "`"
 @function_for_url(
     [
         r"^(\/|\.\.\/|\.\/)",
@@ -658,7 +661,7 @@ def get_page(url, driver, db):
 
                     try: 
                         content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
-                    except ValueError as e:  # 🛠 Catch specific Brotli decompression failure
+                    except ValueError as e:  # 🛠️ Catch specific Brotli decompression failure
                         if "BrotliDecompress failed" in str(e):
                             db_insert_if_new_url(url=url,visited=True,source='BrotliDecompressFailed',parent_host=parent_host,db=db)
                             continue
@@ -1252,9 +1255,10 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
                              source='fast_extension_crawler.head.exception', db=db)
         return
 
-    if (400 <= head_resp.status_code < 500):
-        db_insert_if_new_url(url=url, visited=True, words='', min_webcontent='', raw_webcontent='', source='fast_extension_crawler.head.status_code_4xx', db=db)
-    elif not (200 <= head_resp.status_code < 300):
+    # if (400 <= head_resp.status_code < 500):
+    #    db_insert_if_new_url(url=url, visited=True, words='', min_webcontent='', raw_webcontent='', source='fast_extension_crawler.head.status_code_4xx', db=db)
+    # elif not (200 <= head_resp.status_code < 300):
+    if not (200 <= head_resp.status_code < 300):
         return
     
     print('url {} {}'.format(head_resp.status_code, url))

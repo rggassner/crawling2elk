@@ -1,9 +1,9 @@
-import hashlib                                                                                                       
-import json                                                                                                          
-import os                                                                                                            
-import random                                                                                                        
-import re                                                                                                            
-import string                                                                                                        
+import hashlib
+import json
+import os
+import random
+import re
+import string
 import time
 from config import *
 from datetime import datetime, timezone
@@ -54,12 +54,14 @@ def sanitize_url(
 
     def log_change(reason, before, after):
         if before != after and reason not in skip_log_tags and debug:
-            print(f"\033[91m[{reason}] URL sanitized from -{before}- to -{after}-\033[00m")
+            print(f"\033[91m[{reason}] URL sanitized \
+                  from -{before}- to -{after}-\033[00m")
 
     def clean_hostname_with_userinfo(netloc, scheme):
         """
-        Cleans netloc, preserving valid username:password@host:port patterns.
-        Removes invalid characters, strips default ports, and validates port range.
+        Cleans netloc, preserving valid username:password@host:port
+        patterns. Removes invalid characters, strips default ports, and
+        validates port range.
         """
         userinfo = ''
         host_port = netloc
@@ -468,6 +470,7 @@ content_type_audio_regex=[
         r"^audio/x-mpegurl$",
         r"^audio/x-pn-realaudio$",
         r"^application/octetstream$",
+        r"^application/x-octet-stream$",
         r"^application/octet-stream$",
         r"^application/vnd\.rn-realmedia$",
     ]
@@ -488,6 +491,7 @@ content_type_compressed_regex =[
         r"^application/x-tar-gz$",
         r"^application/x-compress$",
         r"^application/octetstream$",
+        r"^application/x-octet-stream$",
         r"^application/octet-stream$",
         r"^application/x-7z-compressed$",
         r"^application/x-rar-compressed$",
@@ -575,6 +579,7 @@ content_type_video_regex = [
         r"^video/x-matroska$",
         r"^application/x-mpegurl$",
         r"^application/octetstream$",
+        r"^application/x-octet-stream$",
         r"^application/octet-stream$",
         r"^application/vnd\.ms-asf$",
         r"^video/vnd\.dlna\.mpeg-tts$",
@@ -606,6 +611,7 @@ content_type_plain_text_regex = [
         r"^text/x-chdr$",
         r"^text/x-json$",
         r"^text/x-csrc$",
+        r"^text/vnd\.trolltech\.linguist$",
         r"^text/turtle$",
         r"^text/webloc$",
         r"^text/x-vcard$",
@@ -616,9 +622,11 @@ content_type_plain_text_regex = [
         r"^text/markdown$",
         r"^text/directory$",
         r"^text/x-amzn-ion$",
+        r"^text/javsacript$",
         r"^text/x-vcalendar$",
         r"^text/x-component$",
         r"^application/text$",
+        r"^text/x-html-parts$",
         r"^application/jsonp$",
         r"^text/x-javascript$",
         r"^text/event-stream$",
@@ -833,6 +841,7 @@ content_type_all_others_regex = [
         r"^application/oct-stream$",
         r"^application/vnd\.yt-ump$",
         r"^application/octetstream$",
+        r"^application/x-octet-stream$",
         r"^application/x-font-woff$",
         r"^application/x-xpinstall$",
         r"^application/x-httpd-php$",
@@ -908,6 +917,7 @@ content_type_all_others_regex = [
         r"^application/vnd\.vimeo\.profilevideo\+json$",
         r"^application/vnd\.maxmind\.com-country\+json$",
         r"^application/vnd\.maxmind\.com-insights\+json$",
+        r"^application/vnd\.adobe\.error-response\+json$",
         r"^application/vnd\.vimeo\.profilesection\+json$",
         r"^application/vnd\.contentful\.delivery\.v1\+json$",
         r"^application/javascript,application/x-javascript$",

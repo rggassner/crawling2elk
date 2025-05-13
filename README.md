@@ -88,7 +88,9 @@ Python 3.11.11 is recommended:
 Create a virtual environment to run the script
 
 `~/.pyenv/versions/3.11.11/bin/python -m venv venv`
+
 `source venv/bin/activate`
+
 `pip install --upgrade pip`
 
 Install dependencies:

@@ -79,34 +79,22 @@ This is a modular, scalable web crawling framework built for advanced scraping, 
 
 You’ll need the following installed:
 
--   `sudo apt install python3-pip`
-  
--   `sudo apt install expect`
-  
--   `sudo apt install chromium-chromedriver`
-  
--   `sudo apt install nmap`
+`apt install pyenv nmap chromium-chromedriver expect`
+
+Python 3.11.11 is recommended:
+
+`pyenv install 3.11.11`
+
+Create a virtual environment to run the script
+
+`~/.pyenv/versions/3.11.11/bin/python -m venv venv
+source venv/bin/activate
+pip install --upgrade pip`
 
 Install dependencies:
 
 `pip install -r requirements.txt`
 
-Main external libraries used:
-
--   `selenium-wire`
-    
--   `opennsfw2`
-    
--   `fake-useragent`
-    
--   `beautifulsoup4`
-    
--   `Pillow`
-    
--   `elasticsearch`
-    
--   `numpy`
-    
 
 * * *
 

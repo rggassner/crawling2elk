@@ -160,6 +160,13 @@ This makes the engine modular and powerful for specialized scraping and analysis
 - http://archivebot.com/
 
 * * *
+
+## TODO
+
+- Crawl based on web search.
+
+* * *
+
 ## 💬 Author Notes
 
 Built for performance, flexibility, and stealth. Use responsibly.

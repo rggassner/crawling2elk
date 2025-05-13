@@ -17,8 +17,8 @@ DIRECT_LINK_DOWNLOAD_FOLDER = '/dev/null'
 BLOCK_CSS = False
 
 # This makes selenium a bit faster if enabled but might make it detectable
-PERFORMANCE_OPTIMIZED=False
-FORCE_IMAGE_LOAD=False
+PERFORMANCE_OPTIMIZED = False
+FORCE_IMAGE_LOAD = False
 
 # This option only makes sense to be activated when you have an external
 # script packing data to database, since all crawler data is already 
@@ -32,13 +32,13 @@ MAX_DOWNLOAD_TIME = 120
 
 # How many iterations should the python script runs. This does not
 # apply to the wrapper, that makes it run continuously.
-ITERATIONS=10
+ITERATIONS = 10
 
 # Files won't be longer than MAX_FILENAME_LENGTH in disk. If it happens
 # name will be trunkated, but original extensions are kept.
 MAX_FILENAME_LENGTH = 255
 
-#What and where to save
+# What to download and where to save
 DOWNLOAD_MIDIS=True
 MIDIS_FOLDER='midis'
 
@@ -60,7 +60,7 @@ IMAGES_FOLDER='images'
 DOWNLOAD_COMPRESSEDS=False
 COMPRESSEDS_FOLDER='compressed'
 
-#NonSafeForWork parameters
+# NonSafeForWork parameters
 CATEGORIZE_NSFW=False
 NSFW_MIN_PROBABILITY=.78
 MIN_NSFW_RES = 64 * 64
@@ -69,24 +69,24 @@ NSFW_FOLDER='images/nsfw'
 DOWNLOAD_SFW=False
 SFW_FOLDER='images/sfw'
 
-#This will include all directories from tree
-#might sound aggressive for some websites
+# This will include all directories from tree
+# might sound aggressive for some websites
 HUNT_OPEN_DIRECTORIES=True
 
-#Selenium-wire don't do well with http, so we launch a https
-#localhost webservice that allows the content to be embeded and
-#crawled
+# Selenium-wire don't do well with http, so we launch a https
+# localhost webservice that allows the content to be embeded and
+# crawled
 EMBED_PORT="4443"
 HTTPS_EMBED='https://localhost:'+EMBED_PORT+'/embed.html?url='
 
-#How many async workers for each instance type
+# How many async workers for each instance type
 MAX_FAST_WORKERS=2
 FAST_RANDOM_MIN_WAIT=0
 FAST_RANDOM_MAX_WAIT=0
 
 MAX_SCANNER_WORKERS=1
 
-#Elasticsearch connection configuration
+# Elasticsearch connection configuration
 ELASTICSEARCH_HOST="127.0.0.1"
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_USER='elastic'
@@ -97,31 +97,31 @@ MAX_ES_RETRIES=10
 ES_RETRY_DELAY=1
 URLS_INDEX='crawler'
 
-#Word extraction
+# Word extraction
 EXTRACT_WORDS=True
 WORDS_REMOVE_SPECIAL_CHARS=True
 WORDS_TO_LOWER=True
 WORDS_MIN_LEN=3
-#WORDS_MAX_LEN * WORDS_MAX_WORDS should be under 1 million for a default elastic search env
+# WORDS_MAX_LEN * WORDS_MAX_WORDS should be under 1 million for a default elastic search env
 WORDS_MAX_LEN=40
 WORDS_MAX_WORDS=24000
 
-#How many urls should each picking method return
+# How many urls should each picking method return
 RANDOM_SITES_QUEUE=100
 
 MAX_DIR_LEVELS=7
 MAX_HOST_LEVELS=7
 
-#If we should or not save full html to the database
+# If we should or not save full html to the database
 EXTRACT_RAW_WEBCONTENT=True
-#If we should or not save rendered text page to the database
+# If we should or not save rendered text page to the database
 EXTRACT_MIN_WEBCONTENT=True
 
 MAX_WEBCONTENT_SIZE=900000 #should be under 1 million for a default elastic search env
-#URL File should be one url per line
+# URL File should be one url per line
 URL_FILE='sampled_urls.txt'
 
-#be_greedy = True - Save urls to database that might not work, since have not matched any regex.
+# be_greedy = True - Save urls to database that might not work, since have not matched any regex.
 BE_GREEDY=False
 
 # host_regex_block_list do not crawl these domains. 
@@ -130,16 +130,16 @@ host_regex_block_list = [
     r'(^|\.)google$',
 ]
 
-#do not crawl urls that match any of these regexes
+# do not crawl urls that match any of these regexes
 url_regex_block_list = [
     '/noticias/modules/noticias/modules/noticias/modules/',
     '/images/images/images/images/',
 ]
 
-#crawl only domains that match this regex
+# crawl only domains that match this regex
 host_regex_allow_list = [r'.*']
 
-#A weight for every method of url picking
+# A weight for every method of url picking
 METHOD_WEIGHTS = {
     "from_file":    0,
     "fewest_urls":  1,
@@ -149,16 +149,16 @@ METHOD_WEIGHTS = {
     "random":       1
 }
 
-#Scanner options
+# Scanner options
 SERVICES_INVENTORY = "/usr/share/nmap/nmap-services"
 RANDOM_PORT_CHANCE = 0.1
 
-#The scanner should focus on these networks
+# The scanner should focus on these networks
 SCAN_NETWORKS = [
     "0.0.0.0/0"
 ]
 
-#The scanner should avoid these networks
+# The scanner should avoid these networks
 NOSCAN_NETWORKS = [
     "10.0.0.0/8",
     "172.16.0.0/12",

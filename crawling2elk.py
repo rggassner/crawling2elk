@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from elasticsearch import helpers, ConflictError
 from fake_useragent import UserAgent
 from functions import *
+from googlesearch import search
 from io import BytesIO
 from pathlib import PurePosixPath
 from PIL import Image, UnidentifiedImageError
@@ -87,31 +88,64 @@ def is_host_allow_listed(url):
             return True
     return False
 
+
 def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
     script_lines = []
     params = {}
+
     for key, value in doc.items():
         params[key] = value
+
         if key == "visited":
-            script_lines.append("""
-                if (ctx._source.visited == null || ctx._source.visited == false) {
-                    ctx._source.visited = params.visited;
-                }
-            """)
+            script_lines.append(
+                "if (ctx._source.visited == null || "
+                "ctx._source.visited == false) {\n"
+                "    ctx._source.visited = params.visited;\n"
+                "}"
+            )
         elif key != "updated_at":
-            script_lines.append(f"""
-                if (ctx._source['{key}'] != params['{key}']) {{
-                    ctx._source['{key}'] = params['{key}'];
-                }}
-            """)
+            script_lines.append(
+                f"if (ctx._source['{key}'] != params['{key}']) {{\n"
+                f"    ctx._source['{key}'] = params['{key}'];\n"
+                f"}}"
+            )
+
     # Only update updated_at if any other field changed
-    script_lines.append("""
-        if (ctx._source != params.existing_source_snapshot) {
-            ctx._source.updated_at = params.updated_at;
-        }
-    """)
+    script_lines.append(
+        "if (ctx._source != params.existing_source_snapshot) {\n"
+        "    ctx._source.updated_at = params.updated_at;\n"
+        "}"
+    )
 
     return "\n".join(script_lines), params
+
+
+#def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
+#    script_lines = []
+#    params = {}
+#    for key, value in doc.items():
+#        params[key] = value
+#        if key == "visited":
+#            script_lines.append("""
+#                if (ctx._source.visited == null || ctx._source.visited == false) {
+#                    ctx._source.visited = params.visited;
+#                }
+#            """)
+#        elif key != "updated_at":
+#            script_lines.append(f"""
+#                if (ctx._source['{key}'] != params['{key}']) {{
+#                    ctx._source['{key}'] = params['{key}'];
+#                }}
+#            """)
+#    # Only update updated_at if any other field changed
+#    script_lines.append("""
+#        if (ctx._source != params.existing_source_snapshot) {
+#            ctx._source.updated_at = params.updated_at;
+#        }
+#    """)
+#
+#    return "\n".join(script_lines), params
+
 
 def get_words(text: bytes | str) -> list[str]:
     if not text:
@@ -123,6 +157,7 @@ def get_words(text: bytes | str) -> list[str]:
             return []
     return extract_top_words_from_text(text)
 
+
 def get_words_from_soup(soup) -> list[str]:
     text_parts = [
         t for t in soup.find_all(string=True)
@@ -131,6 +166,7 @@ def get_words_from_soup(soup) -> list[str]:
     combined_text = " ".join(text_parts)
     return extract_top_words_from_text(combined_text)
 
+
 def get_min_webcontent(soup):
     text_parts = [
         t for t in soup.find_all(string=True)
@@ -138,6 +174,7 @@ def get_min_webcontent(soup):
     ]
     combined_text = " ".join(text_parts)
     return combined_text
+
 
 def extract_top_words_from_text(text: str) -> list[str]:
     if WORDS_REMOVE_SPECIAL_CHARS:
@@ -148,6 +185,7 @@ def extract_top_words_from_text(text: str) -> list[str]:
     words = [word for word in text.split() if WORDS_MIN_LEN < len(word) <= WORDS_MAX_LEN]
     most_common = Counter(words).most_common(WORDS_MAX_WORDS)
     return [word for word, _ in most_common]
+
 
 def is_open_directory(content, content_url):
     host = urlsplit(content_url)[1]
@@ -196,12 +234,14 @@ def is_open_directory(content, content_url):
             return True
     return False
 
+
 def function_for_url(regexp_list):
     def get_url_function(f):
         for regexp in regexp_list:
             url_functions.append((re.compile(regexp, flags=re.I | re.U), f))
         return f
     return get_url_function
+
 
 # url unsafe {}|\^~[]`
 # regex no need to escape '!', '"', '%', "'", ',', '/', ':', ';', '<', '=', '>', '@', and "`"
@@ -267,6 +307,7 @@ def email_url(args):
     else:
         return False
 
+
 def get_links(soup, content_url,db):
     #If you want to grep some patterns, use the code below.
     #pattern=r'"file":{".*?":"(.*?)"}'
@@ -302,12 +343,14 @@ def get_links(soup, content_url,db):
                     db_insert_if_new_url(url=out_url,source="get_links",visited=False,parent_host=parent_host,db=db)
     return True
 
+
 def function_for_content_type(regexp_list):
     def get_content_type_function(f):
         for regexp in regexp_list:
             content_type_functions.append((re.compile(regexp, flags=re.I | re.U), f))
         return f
     return get_content_type_function
+
 
 def get_directory_tree(url):
     #Host will have scheme, hostname and port
@@ -317,11 +360,13 @@ def get_directory_tree(url):
         dtree.append(str(host+'/'+'/'.join(PurePosixPath(unquote(urlparse(url).path)).parts[1:-iter])))
     return dtree
 
+
 def insert_directory_tree(content_url,db):
     parent_host=urlsplit(content_url)[1]
     for url in get_directory_tree(content_url):
         url = sanitize_url(url)
         db_insert_if_new_url(url=url,words='',content_type='', visited=False,source="insert_directory_tree",parent_host=parent_host,db=db)
+
 
 @function_for_content_type(content_type_html_regex)
 def content_type_download(args):
@@ -357,6 +402,7 @@ def content_type_download(args):
     db_insert_if_new_url(url=args['url'],content_type=args['content_type'],isopendir=isopendir,visited=True,words=words,min_webcontent=min_webcontent,raw_webcontent=raw_webcontent,source='content_type_html_regex',parent_host=args['parent_host'],db=args['db'])
     return True
 
+
 @function_for_content_type(content_type_plain_text_regex)
 def content_type_plain_text(args):
     words = ''
@@ -364,6 +410,7 @@ def content_type_plain_text(args):
         words = get_words(args['content'])
     db_insert_if_new_url(url=args['url'],content_type=args['content_type'],isopendir=False,visited=True,words=words,source='content_type_plain_text_regex',parent_host=args['parent_host'],db=args['db'])
     return True
+
 
 @function_for_content_type(content_type_image_regex)
 def content_type_images(args):
@@ -410,6 +457,7 @@ def content_type_images(args):
     db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_images',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
     return True
 
+
 @function_for_content_type(content_type_midi_regex)
 def content_type_midis(args):
     db_insert_if_new_url(
@@ -445,6 +493,7 @@ def content_type_midis(args):
     with open(filepath, "wb") as f:
         f.write(args['content'])
     return True
+
 
 @function_for_content_type(content_type_audio_regex)
 def content_type_audios(args):
@@ -482,6 +531,7 @@ def content_type_audios(args):
         f.write(args['content'])
     return True
 
+
 @function_for_content_type(content_type_video_regex)
 def content_type_videos(args):
     db_insert_if_new_url(
@@ -517,6 +567,7 @@ def content_type_videos(args):
     with open(filepath, "wb") as f:
         f.write(args['content'])
     return True
+
 
 @function_for_content_type(content_type_pdf_regex)
 def content_type_pdfs(args):
@@ -554,6 +605,7 @@ def content_type_pdfs(args):
         f.write(args['content'])
     return True
 
+
 @function_for_content_type(content_type_doc_regex)
 def content_type_docs(args):
     db_insert_if_new_url(
@@ -589,6 +641,7 @@ def content_type_docs(args):
     with open(filepath, "wb") as f:
         f.write(args['content'])
     return True
+
 
 @function_for_content_type(content_type_compressed_regex)
 def content_type_compresseds(args):
@@ -626,11 +679,13 @@ def content_type_compresseds(args):
         f.write(args['content'])
     return True
 
+
 @function_for_content_type(content_type_all_others_regex)
 def content_type_ignore(args):
     # We update as visited.
     db_insert_if_new_url(url=args['url'],visited=True,isopendir=False,content_type=args['content_type'],source='content_type_all_others_regex',parent_host=args['parent_host'],db=args['db'])
     return True
+
 
 def sanitize_content_type(content_type):
     content_type = content_type.strip() 
@@ -641,6 +696,7 @@ def sanitize_content_type(content_type):
     content_type = re.sub(r'^(.*?);.*$', r"\1",content_type) # keep only the type/subtype part
     content_type = re.sub(r'\s+', '', content_type)  # remove any remaining spaces
     return content_type
+
 
 def get_page(url, driver, db):
     original_url=url
@@ -661,7 +717,7 @@ def get_page(url, driver, db):
 
                     try: 
                         content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
-                    except ValueError as e:  # 🛠️ Catch specific Brotli decompression failure
+                    except ValueError as e:  # 🛠 Catch specific Brotli decompression failure
                         if "BrotliDecompress failed" in str(e):
                             db_insert_if_new_url(url=url,visited=True,source='BrotliDecompressFailed',parent_host=parent_host,db=db)
                             continue
@@ -725,6 +781,7 @@ def break_after(seconds=60):
         return wrapper
     return function
 
+
 ## This "break_after" is a decorator, not intended for timeouts,
 ## but for links that take too long downloading, like streamings
 ## or large files.
@@ -741,6 +798,7 @@ def read_web(url,driver):
 
 class TimeoutException(Exception):  # Custom exception class
     pass
+
 
 def initialize_driver():
     user_agent = UserAgent().random
@@ -776,6 +834,7 @@ def initialize_driver():
     driver.set_window_size(SELENIUM_WIDTH, SELENIUM_HEIGHT)
     return driver
 
+
 def crawler(db):
     for iteration in range(ITERATIONS):
         driver = initialize_driver()
@@ -796,6 +855,7 @@ def crawler(db):
                     pass
         driver.quit()
 
+
 def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
     """
     Randomly selects between different spreading strategies based on weighted probabilities.
@@ -810,6 +870,7 @@ def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
     if METHOD_WEIGHTS is None:
         method_weights = {
             "from_file":    0,
+            "web_search":   0,
             "fewest_urls":  1,
             "less_visited": 2,
             "oldest":       2,
@@ -834,6 +895,7 @@ def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
     # Set up method mapping
     method_functions = {
         "from_file": lambda: get_url_from_file(),
+        "web_search": lambda: get_urls_from_web_search(),
         "fewest_urls": lambda: get_least_covered_random_hosts(db, size=size),
         "less_visited": lambda: get_urls_from_least_visited_hosts(db, size=size),
         "oldest": lambda: get_oldest_unvisited_urls_from_bucket(db, size=size),
@@ -862,6 +924,21 @@ def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
         print(f"Unhandled error in get_random_unvisited_domains: {e}")
         return []
 
+
+def get_urls_from_web_search():
+    urls = []
+    search_for = random.choice(SEARCH_WORDS)
+    s=search(search_for, num_results=100, unique=True, safe=None)
+    for url in s:
+        if not url:
+            continue
+        parsed_url = urlparse(url)
+        host = parsed_url.netloc
+        urls.append({"url": url, "host": host})
+    random.shuffle(urls)
+    return urls
+
+
 def get_url_from_file():
     with open(URL_FILE, 'r', encoding='utf-8') as file:
         urls = []
@@ -876,6 +953,7 @@ def get_url_from_file():
             urls.append({"url": url, "host": host})
         #random.shuffle(urls)
         return urls
+
 
 def get_least_covered_random_hosts(db, size=100):
     """Returns 'size' hosts from a random bucket with the fewest unvisited URLs, and one random URL per host."""
@@ -971,6 +1049,7 @@ def get_least_covered_random_hosts(db, size=100):
             return results
 
     return []
+
 
 def get_urls_from_least_visited_hosts(db, size=100):
     """Fetch 1 truly unvisited URL per host from a random bucket."""
@@ -1074,6 +1153,7 @@ def get_oldest_unvisited_urls_from_bucket(db, size=100):
 
     return []
 
+
 def get_urls_by_random_bucket_and_host_prefix(db, size=100):
     """Get 1 unvisited URL per host from a random bucket where host starts with a random character."""
     for attempt in range(MAX_ES_RETRIES):
@@ -1134,6 +1214,7 @@ def get_urls_by_random_bucket_and_host_prefix(db, size=100):
             return urls
     return []
 
+
 def get_random_host_domains(db, size=100):
     for attempt in range(MAX_ES_RETRIES):
         random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
@@ -1186,6 +1267,7 @@ def get_random_host_domains(db, size=100):
                 print('    \033[35m{}\033[0m'.format(url['url']))
             return result
         return []
+
 
 def db_create_database(initial_url, db):
     print("Creating Elasticsearch index structure.")
@@ -1245,6 +1327,7 @@ def db_create_database(initial_url, db):
     except Exception as e:
         print("Error creating indices or inserting initial document:", e)
         return False
+
 
 def fast_extension_crawler(url, extension, content_type_patterns, db):
     headers = {"User-Agent": UserAgent().random}
@@ -1318,6 +1401,7 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
         print(f"[FAST CRAWLER] Error processing {url}: {e}")
     time.sleep(random.uniform(FAST_RANDOM_MIN_WAIT,FAST_RANDOM_MAX_WAIT))
 
+
 def run_fast_extension_pass(db, max_workers=MAX_FAST_WORKERS):
     shuffled_extensions = list(EXTENSION_MAP.items())
     random.shuffle(shuffled_extensions)
@@ -1369,12 +1453,6 @@ def run_fast_extension_pass(db, max_workers=MAX_FAST_WORKERS):
             except Exception as e:
                 print(f"[FAST CRAWLER] Error retrieving URLs for extension {extension} in bucket {random_bucket}: {e}")
 
-#def is_valid_url(url: str) -> bool:
-#    try:
-#        parsed = urlparse(url)
-#        return parsed.scheme in {"http", "https", "ftp"} and bool(parsed.netloc)
-#    except Exception:
-#        return False
 
 def remove_invalid_urls(db):
     """
@@ -1400,6 +1478,7 @@ def remove_invalid_urls(db):
         #    deleted += 1
     print(f"\n✅ Done. Total invalid URLs deleted: {deleted}")
 
+
 def remove_blocked_hosts_from_es_db(db):
     compiled_blocklist = [re.compile(pattern) for pattern in host_regex_block_list]
     def is_blocked(host):
@@ -1422,6 +1501,7 @@ def remove_blocked_hosts_from_es_db(db):
             db_create_database(INITIAL_URL, db=db)
     print(f"\n✅ Done. Total deleted: {deleted}")
 
+
 def make_https_app():
     return web.Application([
         (r"/(.*)", web.StaticFileHandler, {
@@ -1429,6 +1509,7 @@ def make_https_app():
             "default_filename": "index.html"
         })
     ], debug=False)
+
 
 def start_https_server():
     # Generate self-signed cert (only if not exists)
@@ -1470,6 +1551,7 @@ def get_instance_number():
         print(f"Error determining instance number: {e}")
     return 999
 
+
 def main():
     instance = get_instance_number()
     db = DatabaseConnection()
@@ -1499,6 +1581,7 @@ def main():
         print(f"Instance {instance}: Running full crawler.")
         crawler(db)
     db.close()
+
 
 if __name__ == "__main__":
     main()

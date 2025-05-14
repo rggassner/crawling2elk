@@ -76,7 +76,8 @@ def sanitize_url(
             host = ''.join(c for c in host if c.isalnum() or c in '-.')
             if port.isdigit():
                 port_num = int(port)
-                if (scheme == 'http' and port == '80') or (scheme == 'https' and port == '443'):
+                if (scheme == 'http' and port == '80') or
+                (scheme == 'https' and port == '443'):
                     port = ''
                 elif 1 <= port_num <= 65535:
                     pass  # valid
@@ -115,8 +116,6 @@ def sanitize_url(
     url = url.strip()
     log_change("STRIP_WHITESPACE", pre_sanitize, url)
     pre_sanitize = url
-
-
     special_quote_pairs = [
         (r'^"(.*)"$', r'\1'),
         (r"^'(.*)'$", r'\1'),
@@ -124,7 +123,6 @@ def sanitize_url(
         (r'^\u2018(.*)\u2019$', r'\1'),
         (r'^"(.*)″$', r'\1'),
     ]
-
     for pattern, replacement in special_quote_pairs:
         cleaned = re.sub(pattern, replacement, url)
         log_change("SPECIAL_QUOTE_CLEAN", url, cleaned)
@@ -480,6 +478,7 @@ content_type_compressed_regex =[
         r"^application/zip$",
         r"^application/rar$",
         r"^application/gzip$",
+        r"^application/x-bzip$",
         r"^application/x-xz$",
         r"^application/\.rar$",
         r"^application/\.zip$",
@@ -737,6 +736,7 @@ content_type_all_others_regex = [
         r"^json$",
         r"^null$",
         r"^file$",
+        r"^redirect$",
         r"^woff$",
         r"^\*/\*$",
         r"^woff2$",
@@ -769,6 +769,7 @@ content_type_all_others_regex = [
         r"^application/rtf$",
         r"^application/csv$",
         r"^application/ttf$",
+        r"^application/mbox$",
         r"^application/epub$",
         r"^application/node$",
         r"^application/xlsx$",

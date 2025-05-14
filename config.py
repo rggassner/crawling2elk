@@ -1,8 +1,8 @@
 #!/usr/bin/python3
 
 # Used only in the first run
-# INITIAL_URL='https://crawler-test.com/'
-INITIAL_URL='https://crawler-test.com/'
+# INITIAL_URL = 'https://crawler-test.com/'
+INITIAL_URL = 'https://crawler-test.com/'
 
 # Selenium config
 SELENIUM_WIDTH = 1920
@@ -21,7 +21,7 @@ PERFORMANCE_OPTIMIZED = False
 FORCE_IMAGE_LOAD = False
 
 # This option only makes sense to be activated when you have an external
-# script packing data to database, since all crawler data is already 
+# script packing data to database, since all crawler data is already
 # filtered while urls are entering.
 LOOK_FOR_INVALID_URLS = False
 
@@ -39,30 +39,31 @@ ITERATIONS = 10
 MAX_FILENAME_LENGTH = 255
 
 # What to download and where to save
-DOWNLOAD_MIDIS=True
-MIDIS_FOLDER='midis'
+DOWNLOAD_MIDIS = True
+MIDIS_FOLDER = 'midis'
 
-DOWNLOAD_AUDIOS=False
-AUDIOS_FOLDER='audios'
+DOWNLOAD_AUDIOS = False
+AUDIOS_FOLDER = 'audios'
 
-DOWNLOAD_PDFS=False
-PDFS_FOLDER='pdfs'
+DOWNLOAD_PDFS = False
+PDFS_FOLDER = 'pdfs'
 
-DOWNLOAD_DOCS=False
-DOCS_FOLDER='docs'
+DOWNLOAD_DOCS = False
+DOCS_FOLDER = 'docs'
 
-DOWNLOAD_VIDEOS=False
-VIDEOS_FOLDER='videos'
+DOWNLOAD_VIDEOS = False
+VIDEOS_FOLDER = 'videos'
 
-DOWNLOAD_ALL_IMAGES=False
-IMAGES_FOLDER='images'
+DOWNLOAD_ALL_IMAGES = False
+IMAGES_FOLDER = 'images'
 
-DOWNLOAD_COMPRESSEDS=False
-COMPRESSEDS_FOLDER='compressed'
+DOWNLOAD_COMPRESSEDS = False
+COMPRESSEDS_FOLDER = 'compressed'
 
 # NonSafeForWork parameters
 CATEGORIZE_NSFW=False
 NSFW_MIN_PROBABILITY=.78
+# Minimum number of pixels an image should have in order to be evaluated
 MIN_NSFW_RES = 64 * 64
 DOWNLOAD_NSFW=False
 NSFW_FOLDER='images/nsfw'
@@ -118,8 +119,14 @@ EXTRACT_RAW_WEBCONTENT=True
 EXTRACT_MIN_WEBCONTENT=True
 
 MAX_WEBCONTENT_SIZE=900000 #should be under 1 million for a default elastic search env
+
 # URL File should be one url per line
 URL_FILE='sampled_urls.txt'
+
+# search words will be randomly chosen, web searched and crawled
+SEARCH_WORDS = [
+    "Oni", "Tengu", "Kappa", "Kitsune", "Tanuki", "Yuki-onna", "Rokurokubi"
+]
 
 # be_greedy = True - Save urls to database that might not work, since have not matched any regex.
 BE_GREEDY=False
@@ -142,6 +149,7 @@ host_regex_allow_list = [r'.*']
 # A weight for every method of url picking
 METHOD_WEIGHTS = {
     "from_file":    0,
+    "web_search":   0,
     "fewest_urls":  1,
     "less_visited": 1,
     "oldest":       1,
@@ -170,5 +178,4 @@ NOSCAN_NETWORKS = [
     "100.64.0.0/10",
     "169.254.0.0/16"
 ]
-
 

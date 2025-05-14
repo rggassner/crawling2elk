@@ -101,10 +101,12 @@ async def check_http(ip, port, protocol, verbose=False):
             print(f"Error scanning {url} - {e}")
     return None
 
-def save_to_database(ip, port, protocol, status_code, verbose=False,db=None):
+
+def save_to_database(ip, port, protocol, status_code, verbose=False, db=None):
     if status_code is not None:
         db_insert_if_new_url(url=protocol+'://'+ip+':'+str(port), visited=False, source='port_scanner', parent_host=ip, db=db)
         print('Saved  {}://{}:{} status_code {} '.format(protocol,ip,port, status_code))
+
 
 async def scan_ips(ip_list, concurrency=4, verbose=False,db=None):
     """
@@ -125,6 +127,7 @@ async def scan_ips(ip_list, concurrency=4, verbose=False,db=None):
                 save_to_database(ip, port, protocol,http_code,verbose=verbose,db=db)
     tasks = [bound_check(ip) for ip in ip_list]
     await asyncio.gather(*tasks)
+
 
 def generate_random_ips(count, include_networks=None, exclude_networks=None):
     """
@@ -178,6 +181,7 @@ def generate_random_ips(count, include_networks=None, exclude_networks=None):
             ips.append(str(ip))
     
     return ips
+
 
 if __name__ == "__main__":
     db = DatabaseConnection()

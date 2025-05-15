@@ -76,8 +76,8 @@ def sanitize_url(
             host = ''.join(c for c in host if c.isalnum() or c in '-.')
             if port.isdigit():
                 port_num = int(port)
-                if (scheme == 'http' and port == '80') or
-                (scheme == 'https' and port == '443'):
+                if (scheme == 'http' and port == '80') or \
+                        (scheme == 'https' and port == '443'):
                     port = ''
                 elif 1 <= port_num <= 65535:
                     pass  # valid
@@ -130,16 +130,21 @@ def sanitize_url(
 
     scheme_fixes = [
         (r'^ps://', 'https://'), (r'^ttps://', 'https://'),
-        (r'^htpps://', 'https://'), (r'^httpp://', 'https://'), (r'^http:s//', 'https://'),
-        (r'^hthttps://', 'https://'), (r'^httsp://', 'https://'), (r'^htts://', 'https://'),
-        (r'^htttps://', 'https://'), (r'^https:https://', 'https://'), (r'^https https://', 'https://'),
-        (r'^httpshttps://', 'https://'), (r'^https://https://', 'https://'), (r'^"https://', 'https://'),
-        (r'^httpd://', 'https://'), (r'^htps://', 'https://'), (r'^https: //', 'https://'),
-        (r'^https : //', 'https://'), (r'^http2://', 'https://'), (r'^https%3A//', 'https://'),
-        (r'^%20https://', 'https://'), (r'^htto://', 'http://'), (r'^htt://', 'http://'),
-        (r'^htp://http//', 'http://'), (r'^htp://', 'http://'), (r'^hhttp://', 'http://'),
-        (r'^http:/http://', 'http://'), (r'^http:www', 'http://www'), (r'^htttp://', 'http://'),
-        (r'^ttp://', 'http://'), (r'^%20http://', 'http://'), (r'^%22mailto:', 'mailto:'),
+        (r'^htpps://', 'https://'), (r'^httpp://', 'https://'),
+        (r'^http:s//', 'https://'), (r'^hthttps://', 'https://'),
+        (r'^httsp://', 'https://'), (r'^htts://', 'https://'),
+        (r'^htttps://', 'https://'), (r'^https:https://', 'https://'),
+        (r'^https https://', 'https://'), (r'^httpshttps://', 'https://'),
+        (r'^https://https://', 'https://'), (r'^"https://', 'https://'),
+        (r'^httpd://', 'https://'), (r'^htps://', 'https://'),
+        (r'^https: //', 'https://'), (r'^https : //', 'https://'),
+        (r'^http2://', 'https://'), (r'^https%3A//', 'https://'),
+        (r'^%20https://', 'https://'), (r'^htto://', 'http://'),
+        (r'^htt://', 'http://'), (r'^htp://http//', 'http://'),
+        (r'^htp://', 'http://'), (r'^hhttp://', 'http://'),
+        (r'^http:/http://', 'http://'), (r'^http:www', 'http://www'),
+        (r'^htttp://', 'http://'), (r'^ttp://', 'http://'),
+        (r'^%20http://', 'http://'), (r'^%22mailto:', 'mailto:'),
         (r'^httpqs://', 'https://www.'), (r'^://', 'https://')
     ]
     for pattern, replacement in scheme_fixes:

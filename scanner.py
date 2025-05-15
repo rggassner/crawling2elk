@@ -104,8 +104,16 @@ async def check_http(ip, port, protocol, verbose=False):
 
 def save_to_database(ip, port, protocol, status_code, verbose=False, db=None):
     if status_code is not None:
-        db_insert_if_new_url(url=protocol+'://'+ip+':'+str(port), visited=False, source='port_scanner', parent_host=ip, db=db)
-        print('Saved  {}://{}:{} status_code {} '.format(protocol,ip,port, status_code))
+        db_insert_if_new_url(
+                url=protocol+'://'+ip+':'+str(port),
+                visited=False,
+                source='port_scanner',
+                parent_host=ip, db=db)
+        print('Saved  {}://{}:{} status_code {} '.format(
+            protocol,
+            ip,
+            port,
+            status_code))
 
 
 async def scan_ips(ip_list, concurrency=4, verbose=False,db=None):

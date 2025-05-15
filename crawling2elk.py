@@ -37,61 +37,61 @@ from urllib3.exceptions import InsecureRequestWarning
 if CATEGORIZE_NSFW:
     import opennsfw2 as n2
     model = n2.make_open_nsfw_model()
-
-absl.logging.set_verbosity('error')
-warnings.filterwarnings("ignore", category=InsecureRequestWarning)
-warnings.filterwarnings(
-        "ignore",
-        category=Warning,
-        message=".*verify_certs=False is insecure.*")
-warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-url_functions = []
-content_type_functions = []
-lock_file = None  # Global reference to prevent garbage collection
-
-# Used to generate wordlist
-soup_tag_blocklist = [
-    "[document]",
-    "noscript",
-    "header",
-    "html",
-    "meta",
-    "head",
-    "input",
-    "script",
-    "style",
-]
-
-
-# Verify if host is in a blocklist.
-def is_host_block_listed(url):
-    for regex in host_regex_block_list:
-        if re.search(regex, url, flags=re.I | re.U):
-            return True
-    return False
-
-
-# Verify if url is in a blocklist.
-def is_url_block_listed(url):
-    for regex in url_regex_block_list:
-        if re.search(regex, url, flags=re.I | re.U):
-            return True
-    return False
-
-
-# Verify if url is in a allowlist.
-def is_host_allow_listed(url):
-    for regex in host_regex_allow_list:
-        if re.search(regex, url, flags=re.I | re.U):
-            return True
-    return False
-
-
-def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
-    script_lines = []
-    params = {}
+                                                                                                                     
+absl.logging.set_verbosity('error')                                                                                  
+warnings.filterwarnings("ignore", category=InsecureRequestWarning)                                                   
+warnings.filterwarnings(                                                                                             
+        "ignore",                                                                                                    
+        category=Warning,                                                                                            
+        message=".*verify_certs=False is insecure.*")                                                                
+warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)                                            
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)                                                  
+                                                                                                                     
+url_functions = []                                                                                                   
+content_type_functions = []                                                                                          
+lock_file = None  # Global reference to prevent garbage collection                                                   
+                                                                                                                     
+# Used to generate wordlist                                                                                          
+soup_tag_blocklist = [                                                                                               
+    "[document]",                                                                                                    
+    "noscript",                                                                                                      
+    "header",                                                                                                        
+    "html",                                                                                                          
+    "meta",                                                                                                          
+    "head",                                                                                                          
+    "input",                                                                                                         
+    "script",                                                                                                        
+    "style",                                                                                                         
+]                                                                                                                    
+                                                                                                                     
+                                                                                                                     
+# Verify if host is in a blocklist.                                                                                  
+def is_host_block_listed(url):                                                                                       
+    for regex in host_regex_block_list:                                                                              
+        if re.search(regex, url, flags=re.I | re.U):                                                                 
+            return True                                                                                              
+    return False                                                                                                     
+                                                                                                                     
+                                                                                                                     
+# Verify if url is in a blocklist.                                                                                   
+def is_url_block_listed(url):                                                                                        
+    for regex in url_regex_block_list:                                                                               
+        if re.search(regex, url, flags=re.I | re.U):                                                                 
+            return True                                                                                              
+    return False                                                                                                     
+                                                                                                                     
+                                                                                                                     
+# Verify if url is in a allowlist.                                                                                   
+def is_host_allow_listed(url):                                                                                       
+    for regex in host_regex_allow_list:                                                                              
+        if re.search(regex, url, flags=re.I | re.U):                                                                 
+            return True                                                                                              
+    return False                                                                                                     
+                                                                                                                     
+                                                                                                                     
+def build_conditional_update_script(doc: dict) -> tuple[str, dict]:                                                  
+    script_lines = []                                                                                                
+    params = {}                                                                                                      
 
     for key, value in doc.items():
         params[key] = value
@@ -118,33 +118,6 @@ def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
     )
 
     return "\n".join(script_lines), params
-
-
-#def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
-#    script_lines = []
-#    params = {}
-#    for key, value in doc.items():
-#        params[key] = value
-#        if key == "visited":
-#            script_lines.append("""
-#                if (ctx._source.visited == null || ctx._source.visited == false) {
-#                    ctx._source.visited = params.visited;
-#                }
-#            """)
-#        elif key != "updated_at":
-#            script_lines.append(f"""
-#                if (ctx._source['{key}'] != params['{key}']) {{
-#                    ctx._source['{key}'] = params['{key}'];
-#                }}
-#            """)
-#    # Only update updated_at if any other field changed
-#    script_lines.append("""
-#        if (ctx._source != params.existing_source_snapshot) {
-#            ctx._source.updated_at = params.updated_at;
-#        }
-#    """)
-#
-#    return "\n".join(script_lines), params
 
 
 def get_words(text: bytes | str) -> list[str]:
@@ -182,7 +155,8 @@ def extract_top_words_from_text(text: str) -> list[str]:
     if WORDS_TO_LOWER:
         text = text.lower()
 
-    words = [word for word in text.split() if WORDS_MIN_LEN < len(word) <= WORDS_MAX_LEN]
+    words = [word for word in text.split() if \
+            WORDS_MIN_LEN < len(word) <= WORDS_MAX_LEN]
     most_common = Counter(words).most_common(WORDS_MAX_WORDS)
     return [word for word, _ in most_common]
 
@@ -760,44 +734,79 @@ def get_page(url, driver, db):
     db_insert_if_new_url(url=original_url,visited=True,source='get_page.end.original',parent_host=parent_host,db=db)
 
 
+class TimeoutException(Exception):
+    """
+    Custom exception raised when a timeout occurs.
+    """
+    pass
+
+
 def break_after(seconds=60):
-    def timeout_handler(signum, frame):  # Custom signal handler
-        raise TimeoutException
-    def function(function):
+    """
+    A decorator to limit the execution time of a function.
+
+    It is particularly useful for interrupting long-running or hanging operations,
+    such as web pages that stream or download large files indefinitely.
+
+    Parameters:
+    ----------
+    seconds : int
+        The maximum allowed execution time in seconds.
+
+    Returns:
+    -------
+    function
+        A wrapped function that will raise TimeoutException if it exceeds the time limit.
+    """
+    def timeout_handler(signum, frame):
+        raise TimeoutException()
+
+    def function_decorator(function):
         def wrapper(*args, **kwargs):
             signal.signal(signal.SIGALRM, timeout_handler)
             signal.alarm(seconds)
             try:
-                res = function(*args, **kwargs)
-                signal.alarm(0)  # Clear alarm
-                return res
+                result = function(*args, **kwargs)
+                signal.alarm(0)  # Clear the alarm if function returns in time
+                return result
             except TimeoutException:
                 print(
-                    "Oops, timeout: {} {} {} {} sec reached.".format(
-                        seconds, function.__name__, args, kwargs
-                    )
+                    f"Oops, timeout: {seconds} sec reached in {function.__name__} with args={args} kwargs={kwargs}"
                 )
-            return
+                return None
         return wrapper
-    return function
+    return function_decorator
 
 
-## This "break_after" is a decorator, not intended for timeouts,
-## but for links that take too long downloading, like streamings
-## or large files.
 @break_after(MAX_DOWNLOAD_TIME)
-def read_web(url,driver):
+def read_web(url, driver):
+    """
+    Loads a web page in the given Selenium driver, with a timeout applied.
+
+    If the URL is HTTP (not HTTPS), it rewrites it to use a local HTTPS embed proxy.
+    Useful for embedding external pages in a secure local environment.
+
+    Parameters:
+    ----------
+    url : str
+        The URL to be loaded.
+
+    driver : selenium.webdriver
+        The Selenium WebDriver instance.
+
+    Returns:
+    -------
+    driver or False
+        Returns the driver if successful, or False if an exception occurs.
+    """
     try:
         if url.startswith('http://'):
-            url=HTTPS_EMBED+url
+            url = HTTPS_EMBED + url
         driver.get(url)
         return driver
     except Exception as e:
         print(e)
         return False
-
-class TimeoutException(Exception):  # Custom exception class
-    pass
 
 
 def initialize_driver():
@@ -820,9 +829,6 @@ def initialize_driver():
         options.add_argument('--blink-settings=imagesEnabled=false')
     options.add_argument('--ignore-certificate-errors-spki-list')
     options.add_argument('--ignore-ssl-errors')
-    options.add_argument("--ignore-certificate-errors")
-    options.add_argument("--disable-web-security")
-    options.add_argument("--allow-running-insecure-content")
     #options.add_argument('--disable-webrtc')
     #options.add_argument('--disable-geolocation')
     #options.add_argument('--disable-infobars')
@@ -830,6 +836,12 @@ def initialize_driver():
     #options.add_argument('--disable-javascript')
     #options.add_argument('--proxy-server=http://your-proxy-server:port')
     #options.add_argument('--proxy-server=http://'+PROXY_HOST+':'PROXY_PORT)
+
+    # The three options below must be enabled to allow navigating http sites
+    # through the localhost https server
+    options.add_argument("--ignore-certificate-errors")
+    options.add_argument("--disable-web-security")
+    options.add_argument("--allow-running-insecure-content")
     driver = webdriver.Chrome(options=options)
     driver.set_window_size(SELENIUM_WIDTH, SELENIUM_HEIGHT)
     return driver

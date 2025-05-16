@@ -116,7 +116,7 @@ def save_to_database(ip, port, protocol, status_code, verbose=False, db=None):
             status_code))
 
 
-async def scan_ips(ip_list, concurrency=4, verbose=False,db=None):
+async def scan_ips(ip_list, concurrency=4, verbose=False, db=None):
     """
     Scan a randomized list of IPs for a randomly selected protocol and port.
     """

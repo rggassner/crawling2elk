@@ -37,61 +37,61 @@ from urllib3.exceptions import InsecureRequestWarning
 if CATEGORIZE_NSFW:
     import opennsfw2 as n2
     model = n2.make_open_nsfw_model()
-                                                                                                                     
-absl.logging.set_verbosity('error')                                                                                  
-warnings.filterwarnings("ignore", category=InsecureRequestWarning)                                                   
-warnings.filterwarnings(                                                                                             
-        "ignore",                                                                                                    
-        category=Warning,                                                                                            
-        message=".*verify_certs=False is insecure.*")                                                                
-warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)                                            
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)                                                  
-                                                                                                                     
-url_functions = []                                                                                                   
-content_type_functions = []                                                                                          
-lock_file = None  # Global reference to prevent garbage collection                                                   
-                                                                                                                     
-# Used to generate wordlist                                                                                          
-soup_tag_blocklist = [                                                                                               
-    "[document]",                                                                                                    
-    "noscript",                                                                                                      
-    "header",                                                                                                        
-    "html",                                                                                                          
-    "meta",                                                                                                          
-    "head",                                                                                                          
-    "input",                                                                                                         
-    "script",                                                                                                        
-    "style",                                                                                                         
-]                                                                                                                    
-                                                                                                                     
-                                                                                                                     
-# Verify if host is in a blocklist.                                                                                  
-def is_host_block_listed(url):                                                                                       
-    for regex in host_regex_block_list:                                                                              
-        if re.search(regex, url, flags=re.I | re.U):                                                                 
-            return True                                                                                              
-    return False                                                                                                     
-                                                                                                                     
-                                                                                                                     
-# Verify if url is in a blocklist.                                                                                   
-def is_url_block_listed(url):                                                                                        
-    for regex in url_regex_block_list:                                                                               
-        if re.search(regex, url, flags=re.I | re.U):                                                                 
-            return True                                                                                              
-    return False                                                                                                     
-                                                                                                                     
-                                                                                                                     
-# Verify if url is in a allowlist.                                                                                   
-def is_host_allow_listed(url):                                                                                       
-    for regex in host_regex_allow_list:                                                                              
-        if re.search(regex, url, flags=re.I | re.U):                                                                 
-            return True                                                                                              
-    return False                                                                                                     
-                                                                                                                     
-                                                                                                                     
-def build_conditional_update_script(doc: dict) -> tuple[str, dict]:                                                  
-    script_lines = []                                                                                                
-    params = {}                                                                                                      
+
+absl.logging.set_verbosity('error')
+warnings.filterwarnings("ignore", category=InsecureRequestWarning)
+warnings.filterwarnings(
+        "ignore",
+        category=Warning,
+        message=".*verify_certs=False is insecure.*")
+warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+url_functions = []
+content_type_functions = []
+lock_file = None  # Global reference to prevent garbage collection
+
+# Used to generate wordlist
+soup_tag_blocklist = [
+    "[document]",
+    "noscript",
+    "header",
+    "html",
+    "meta",
+    "head",
+    "input",
+    "script",
+    "style",
+]
+
+
+# Verify if host is in a blocklist.
+def is_host_block_listed(url):
+    for regex in host_regex_block_list:
+        if re.search(regex, url, flags=re.I | re.U):
+            return True
+    return False
+
+
+# Verify if url is in a blocklist.
+def is_url_block_listed(url):
+    for regex in url_regex_block_list:
+        if re.search(regex, url, flags=re.I | re.U):
+            return True
+    return False
+
+
+# Verify if url is in a allowlist.
+def is_host_allow_listed(url):
+    for regex in host_regex_allow_list:
+        if re.search(regex, url, flags=re.I | re.U):
+            return True
+    return False
+
+
+def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
+    script_lines = []
+    params = {}
 
     for key, value in doc.items():
         params[key] = value
@@ -155,8 +155,8 @@ def extract_top_words_from_text(text: str) -> list[str]:
     if WORDS_TO_LOWER:
         text = text.lower()
 
-    words = [word for word in text.split() if \
-            WORDS_MIN_LEN < len(word) <= WORDS_MAX_LEN]
+    words = [word for word in text.split() if
+             WORDS_MIN_LEN < len(word) <= WORDS_MAX_LEN]
     most_common = Counter(words).most_common(WORDS_MAX_WORDS)
     return [word for word, _ in most_common]
 
@@ -174,7 +174,8 @@ def is_open_directory(content, content_url):
         r'<body[^>]*class="[^"]*dufs[^"]*"',                 # DUFS body
         r'<footer[^>]*>Generated by dufs',                   # DUFS footer
         r'<script[^>]*src="[^"]*dufs[^"]*"',                 # DUFS JS
-        r'<div class="breadcrumbs">Folder Path</div>',       # Caddy-style breadcrumb
+        # Caddy-style breadcrumb
+        r'<div class="breadcrumbs">Folder Path</div>',
         r'<th><a href="\?C=N;O=D">Name</a></th><th><a href="\?C=M;O=A">Last modified</a></th><th><a href="\?C=S;O=A">Size</a></th><th><a href="\?C=D;O=A">Description</a></th>',
         r'<table class="sortable">\s*<thead>\s*<tr>\s*<th>Name\s*</th>\s*<th>Size\s*</th>\s*<th>Uploaded\s*</th>\s*<th>\s*</th>\s*</tr>',
         r'<title>Directory Listing</title>',

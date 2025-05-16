@@ -8,7 +8,7 @@ INITIAL_URL = 'https://crawler-test.com/'
 ELASTICSEARCH_HOST = "127.0.0.1"
 ELASTICSEARCH_PORT = 9200
 ELASTICSEARCH_USER = 'elastic'
-ELASTICSEARCH_PASSWORD = 'yourpassowrdhere'
+ELASTICSEARCH_PASSWORD = 'yourpasswordhere'
 ELASTICSEARCH_CA_CERT_PATH = None
 ELASTICSEARCH_RANDOM_BUCKETS = 20
 MAX_ES_RETRIES = 10
@@ -103,7 +103,8 @@ EXTRACT_WORDS = True
 WORDS_REMOVE_SPECIAL_CHARS = True
 WORDS_TO_LOWER = True
 WORDS_MIN_LEN = 3
-# WORDS_MAX_LEN * WORDS_MAX_WORDS should be under 1 million for a default elastic search env
+# WORDS_MAX_LEN * WORDS_MAX_WORDS should be under 1 million
+# for a default elastic search env
 WORDS_MAX_LEN = 40
 WORDS_MAX_WORDS = 24000
 
@@ -125,7 +126,7 @@ URL_FILE = 'sampled_urls.txt'
 
 # search words will be randomly chosen, web searched and crawled
 SEARCH_WORDS = [
-    "Oni", "Tengu", "Kappa", "Kitsune", "Tanuki", "Yuki-onna", "Rokurokubi"
+    "Oni", "Tengu", "Kappa", "Kitsune", "Tanuki", "Yuki-onna", "Rokurokubi",
 ]
 
 # be_greedy = True - Save urls to database that might not work, since have not matched any regex.
@@ -159,6 +160,7 @@ METHOD_WEIGHTS = {
 
 # Scanner options
 SERVICES_INVENTORY = "/usr/share/nmap/nmap-services"
+# Chance for running the algorythm to generate a non conventional port
 RANDOM_PORT_CHANCE = 0.1
 
 # The scanner should focus on these networks

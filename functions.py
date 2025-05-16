@@ -171,7 +171,12 @@ def sanitize_url(
             if parts and '.' in parts[0]:
                 netloc = clean_hostname_with_userinfo(parts[0], scheme)
                 path = '/' + (parts[1] if len(parts) > 1 else '')
-                rebuilt = urlunsplit((scheme, netloc, path, parsed.query, parsed.fragment))
+                rebuilt = urlunsplit(
+                        (scheme,
+                         netloc,
+                         path,
+                         parsed.query,
+                         parsed.fragment))
                 log_change("FIX_NETLOC_IN_PATH", url, rebuilt)
                 url = rebuilt
         else:
@@ -637,6 +642,7 @@ content_type_plain_text_regex = [
         r"^application/ld\+json$",
         r"^application/ion\+json$",
         r"^application/hal\+json$",
+        r"^applicaiton/jasvascript$",
         r"^application/json,charset=",
         r"^application/stream\+json$",
         r"^application/problem\+json$",
@@ -821,6 +827,7 @@ content_type_all_others_regex = [
         r"^application/x-subrip$",
         r"^application/x-bibtex$",
         r"^application/pkix-crl$",
+        r"^application/vnd\.smaf$",
         r"^application/geo\+json$",
         r"^application/font-sfnt$",
         r"^application/ttml\+xml$",
@@ -847,7 +854,6 @@ content_type_all_others_regex = [
         r"^application/oct-stream$",
         r"^application/vnd\.yt-ump$",
         r"^application/octetstream$",
-        r"^application/x-octet-stream$",
         r"^application/x-font-woff$",
         r"^application/x-xpinstall$",
         r"^application/x-httpd-php$",
@@ -862,12 +868,16 @@ content_type_all_others_regex = [
         r"^application/vnd\.ms-word$",
         r"^application/x-executable$",
         r"^application/marcxml\+xml$",
+        r"^application/v3\.25\+json$",
+        r"^application/pgp-encrypted$",
         r"^application/x-base64-frpc$",
         r"^application/pgp-signature$",
         r"^application/x-ms-manifest$",
         r"^application/x-mobi8-ebook$",
         r"^application/grpc-web-text$",
         r"^application/vnd\.ms-excel$",
+        r"^application/x-octet-stream$",
+        r"^application/x-java-archive$",
         r"^application/force-download$",
         r"^x-application/octet-stream$",
         r"^application/x-x509-ca-cert$",
@@ -882,6 +892,7 @@ content_type_all_others_regex = [
         r"^application/vnd\.ms-opentype$",
         r"^application/x-debian-package$",
         r"^application/x-httpd-ea-php54$",
+        r"^application/vnd\.ms-htmlhelp$",
         r"^application/x-shared-scripts$",
         r"^application/x-java-jnlp-file$",
         r"^application/x-httpd-ea-php71$",
@@ -903,6 +914,7 @@ content_type_all_others_regex = [
         r"^application/vnd\.imgur\.v1\+json$",
         r"^application/vnd\.adobe\.dex\+json$",
         r"^application/x-www-form-urlencoded$",
+        r"^application/vnd\.google-earth\.kmz$",
         r"^application/vnd\.solid-v1\.0\+json$",
         r"^application/x-typekit-augmentation$",
         r"^application/x-unknown-content-type$",

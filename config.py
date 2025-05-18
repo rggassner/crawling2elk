@@ -10,6 +10,8 @@ ELASTICSEARCH_PORT = 9200
 ELASTICSEARCH_USER = 'elastic'
 ELASTICSEARCH_PASSWORD = 'yourpasswordhere'
 ELASTICSEARCH_CA_CERT_PATH = None
+
+# In order to avoid multiple workers on the same url
 ELASTICSEARCH_RANDOM_BUCKETS = 20
 MAX_ES_RETRIES = 10
 ES_RETRY_DELAY = 1
@@ -93,6 +95,7 @@ HTTPS_EMBED = 'https://localhost:'+EMBED_PORT+'/embed.html?url='
 
 # How many async workers for each instance type
 MAX_FAST_WORKERS = 2
+# When working with only one worker and if you want to avoid WAFs
 FAST_RANDOM_MIN_WAIT = 0
 FAST_RANDOM_MAX_WAIT = 0
 
@@ -119,7 +122,8 @@ EXTRACT_RAW_WEBCONTENT = True
 # If we should or not save rendered text page to the database
 EXTRACT_MIN_WEBCONTENT = True
 
-MAX_WEBCONTENT_SIZE = 900000 #should be under 1 million for a default elastic search env
+# Should be under 1 million for a default elastic search env
+MAX_WEBCONTENT_SIZE = 900000
 
 # URL File should be one url per line
 URL_FILE = 'sampled_urls.txt'

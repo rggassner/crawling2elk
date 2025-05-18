@@ -229,8 +229,8 @@ def function_for_url(regexp_list):
 )
 def relative_url(args):
     out_url = urljoin(args['parent_url'], args['url'])
-    parent_host=urlsplit(args['parent_url'])[1]
-    db_insert_if_new_url(url=out_url, visited=False, source="relative_url",parent_host=parent_host,db=args['db'])
+    parent_host = urlsplit(args['parent_url'])[1]
+    db_insert_if_new_url(url=out_url, visited=False, source="relative_url", parent_host=parent_host, db=args['db'])
     return True
 
 
@@ -692,7 +692,7 @@ def get_page(url, driver, db):
 
                     try: 
                         content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
-                    except ValueError as e:  # 🛠 Catch specific Brotli decompression failure
+                    except ValueError as e:  # 🛠️ Catch specific Brotli decompression failure
                         if "BrotliDecompress failed" in str(e):
                             db_insert_if_new_url(url=url,visited=True,source='BrotliDecompressFailed',parent_host=parent_host,db=db)
                             continue

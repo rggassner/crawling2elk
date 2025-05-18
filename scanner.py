@@ -121,14 +121,13 @@ async def scan_ips(ip_list, concurrency=4, verbose=False, db=None):
     Scan a randomized list of IPs for a randomly selected protocol and port.
     """
     sem = asyncio.Semaphore(concurrency)
-    
+
     async def bound_check(ip):
         protocol = get_http_or_https()  # Choose a protocol at random
-        if random.random() < RANDOM_PORT_CHANCE:  
+        if random.random() < RANDOM_PORT_CHANCE:
             port = generate_random_port(ports)  # Choose a random non-default port
         else:
             port = 80 if protocol == "http" else 443  # Use default ports for HTTP/HTTPS
-
         async with sem:
             http_code = await check_http(ip, port, protocol, verbose)
             if http_code:
@@ -156,12 +155,10 @@ def generate_random_ips(count, include_networks=None, exclude_networks=None):
         include_networks_obj = [IPv4Network('0.0.0.0/0')]  # Default to all IPv4 addresses
     else:
         include_networks_obj = [IPv4Network(network) for network in include_networks]
-        
     if exclude_networks is None:
         exclude_networks_obj = EXCLUDED_NETWORKS  # Assuming this is defined globally
     else:
         exclude_networks_obj = [IPv4Network(network) for network in exclude_networks]
-    
     # Calculate the total number of IPs in all included networks
     network_ranges = []
     total_ips = 0
@@ -170,12 +167,10 @@ def generate_random_ips(count, include_networks=None, exclude_networks=None):
         size = network.num_addresses
         network_ranges.append((total_ips, total_ips + size - 1, network))
         total_ips += size
-    
     ips = []
     while len(ips) < count:
         # Pick a random number within the total range
         random_index = random.randint(0, total_ips - 1)
-        
         # Find which network this index belongs to
         for start, end, network in network_ranges:
             if start <= random_index <= end:
@@ -183,11 +178,9 @@ def generate_random_ips(count, include_networks=None, exclude_networks=None):
                 ip_index = random_index - start
                 ip = IPv4Address(int(network.network_address) + ip_index)
                 break
-        
         # Check if the IP is in any of the exclude networks
         if not any(ip in network for network in exclude_networks_obj):
             ips.append(str(ip))
-    
     return ips
 
 
@@ -196,10 +189,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Scan IP addresses for open ports and services.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
     args = parser.parse_args()
-
     # Load ports and their probabilities
     ports = load_nmap_services(SERVICES_INVENTORY)
-
     ip_count = 4096  # Number of IPs to scan in each run
     concurrency = MAX_SCANNER_WORKERS
     ip_list = generate_random_ips(ip_count,include_networks=SCAN_NETWORKS,exclude_networks=NOSCAN_NETWORKS)

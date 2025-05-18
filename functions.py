@@ -181,7 +181,12 @@ def sanitize_url(
                 url = rebuilt
         else:
             path = re.sub(r'/{2,}', '/', parsed.path)
-            rebuilt = urlunsplit((scheme, netloc, path, parsed.query, parsed.fragment))
+            rebuilt = urlunsplit(
+                    (scheme,
+                     netloc,
+                     path,
+                     parsed.query,
+                     parsed.fragment))
             log_change("NORMALIZE_PATH_SLASHES", url, rebuilt)
             url = rebuilt
     except Exception:
@@ -196,7 +201,10 @@ def sanitize_url(
 
         if ':' in netloc:
             host, port = netloc.split(':', 1)
-            if (scheme == 'http' and port == '80') or (scheme == 'https' and port == '443'):
+            if (
+                    (scheme == 'http' and port == '80') or
+                    (scheme == 'https' and port == '443')
+                ):
                 netloc = host
 
         path = safe_normalize_path_slashes(parsed.path)
@@ -474,6 +482,7 @@ content_type_audio_regex=[
         r"^audio/mpegurl$",
         r"^audio/x-scpls$",
         r"^audio/x-ms-wma$",
+        r"^audio/prs\.sid$",
         r"^application/mp3$",
         r"^audio/x-mpegurl$",
         r"^audio/x-pn-realaudio$",
@@ -761,12 +770,15 @@ content_type_all_others_regex = [
         r"^font/truetype$",
         r"^x-font/ttf$",
         r"^font/sfnt$",
+        r"^(null)/ico$",
         r"^font/x-woff$",
         r"^x-font/woff$",
         r"^font/x-woff2$",
         r"^font/opentype$",
         r"^model/vnd\.mts$",
         r"^model/step$",
+        r"^multipart/mixed$",
+        r"^image/vnd\.djvu$",
         r"^text/css$",
         r"^text/x-unknown-content-type$",
         r"^text/plaincharset:",
@@ -930,9 +942,11 @@ content_type_all_others_regex = [
         r"^application/vnd\.vimeo\.location\+json$",
         r"^application/opensearchdescription\+xml$",
         r"^application/vnd\.maxmind\.com-city\+json$",
+        r"^application/vnd\.initializr\.v2\.2\+json$",
         r"^application/vnd\.maxmind\.com-error\+json$",
         r"^application/vnd\.radio-canada\.neuro\+json$",
         r"^application/vnd\.vimeo\.profilevideo\+json$",
+        r"^application/vnd\.oracle\.adf\.version\+json$",
         r"^application/vnd\.maxmind\.com-country\+json$",
         r"^application/vnd\.maxmind\.com-insights\+json$",
         r"^application/vnd\.adobe\.error-response\+json$",
@@ -991,6 +1005,7 @@ EXTENSION_MAP = {
         ".png"  : content_type_image_regex,
         ".PNG"  : content_type_image_regex,
         ".gif"  : content_type_image_regex,
+        ".svg"  : content_type_image_regex,
         ".pdf"  : content_type_pdf_regex,
         ".rm"   : content_type_audio_regex,
         ".mp3"  : content_type_audio_regex,

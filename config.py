@@ -133,7 +133,8 @@ SEARCH_WORDS = [
     "Oni", "Tengu", "Kappa", "Kitsune", "Tanuki", "Yuki-onna", "Rokurokubi",
 ]
 
-# be_greedy = True - Save urls to database that might not work, since have not matched any regex.
+# be_greedy = True - Save urls to database that might not work,
+# since have not matched any regex.
 BE_GREEDY = False
 
 # host_regex_block_list do not crawl these domains. 
@@ -142,13 +143,13 @@ host_regex_block_list = [
     r'(^|\.)google$',
 ]
 
-# do not crawl urls that match any of these regexes
-url_regex_block_list = [
+# Do not crawl urls that match any of these regexes
+URL_REGEX_BLOCK_LIST = [
     '/noticias/modules/noticias/modules/noticias/modules/',
     '/images/images/images/images/',
 ]
 
-# crawl only domains that match this regex
+# Only crawl domains that match this regex
 host_regex_allow_list = [r'.*']
 
 # A weight for every method of url picking

@@ -204,7 +204,7 @@ def sanitize_url(
             if (
                     (scheme == 'http' and port == '80') or
                     (scheme == 'https' and port == '443')
-                ):
+               ):
                 netloc = host
 
         path = safe_normalize_path_slashes(parsed.path)
@@ -214,13 +214,16 @@ def sanitize_url(
     except Exception:
         return url.strip()
 
+
 def hash_url(url):
     return hashlib.sha256(url.encode('utf-8')).hexdigest()
+
 
 def remove_jsessionid_with_semicolon(url):
     pattern = r';jsessionid=[^&?]*'
     cleaned_url = re.sub(pattern, '', url)
     return cleaned_url
+
 
 def db_insert_if_new_url(url='', isopendir=None, visited=None, source='', content_type='', words='', min_webcontent='', raw_webcontent='',
                          isnsfw='', resolution='', parent_host='', email=None, db=None, debug=False):
@@ -419,6 +422,7 @@ def db_insert_if_new_url(url='', isopendir=None, visited=None, source='', conten
         print(f"[Elasticsearch] ❌ Error inserting URL '{url}': {type(e).__name__} - {e}")
         return False
 
+
 def get_host_levels(hostname):
     """Returns all host levels from right (TLD) to left (subdomain), ignoring any port number."""
     hostname = hostname.split(':')[0]  # Remove port if present
@@ -466,6 +470,8 @@ content_type_midi_regex=[
 
 content_type_audio_regex=[
         r"^audio/ogg$",
+        r"^audio/x-oggvorbis$",
+        r"^audio/x-pn-realaudio-plugin$",
         r"^audio/mp3$",
         r"^audio/mp4$",
         r"^audio/wav$",
@@ -580,12 +586,14 @@ content_type_video_regex = [
         r"^video/mp4$",
         r"^video/ogg$",
         r"^video/f4v$",
+        r"^video/3gpp$",
         r"^video/m2ts$",
         r"^video/webm$",
         r"^video/MP2T$",
         r"^video/mpeg$",
         r"^video/x-m4v$",
         r"^video/x-flv$",
+        r"^video/x-ms-wm$",
         r"^video/x-ms-wmv$",
         r"^video/x-ms-asf$",
         r"^application/ogg$",
@@ -624,11 +632,15 @@ content_type_plain_text_regex = [
         r"^text/vcard$",
         r"^text/x-tex$",
         r"^text/plain$",
+        r"^text/x-wiki$",
         r"^text/x-diff$",
         r"^text/x-perl$",
         r"^text/x-chdr$",
         r"^text/x-json$",
         r"^text/x-csrc$",
+        r"^text/x-python$",
+        r"^text/x-csh$",
+        r"^text/vnd\.graphviz$",
         r"^text/vnd\.trolltech\.linguist$",
         r"^text/turtle$",
         r"^text/webloc$",
@@ -764,6 +776,14 @@ content_type_all_others_regex = [
         r"^unknown/unknown$",
         r"^font/ttf$",
         r"^font/otf$",
+        r"^font/font-woff2$",
+        r"^application/vnd\.olpc-sugar$",
+        r"^text/vnd\.turbo-stream\.html$",
+        r"^application/vnd\.vimeo\.video\+json$",
+        r"^application/vnd\.vimeo\.credit\+json$",
+        r"^application/vnd\.vimeo\.comment\+json$",
+        r"^application/vnd\.vimeo\.video\.texttrack\+json$",
+        r"^cms/redirect$",
         r"^font/woff$",
         r"^font/woff2$",
         r"^\(null\)/woff2$",
@@ -937,6 +957,7 @@ content_type_all_others_regex = [
         r"^application/vnd\.mapbox-vector-tile$",
         r"^application/amazonui-streaming-json$",
         r"^application/vnd\.vimeo\.error\+json$",
+        r"^application/vnd\.cas\.services\+yaml$",
         r"^application/vnd.inveniordm\.v1\+json$",
         r"^application/x-redhat-package-manager$",
         r"^application/vnd\.vimeo\.location\+json$",
@@ -1012,8 +1033,11 @@ EXTENSION_MAP = {
         ".wav"  : content_type_audio_regex,
         ".flac" : content_type_audio_regex,
         ".m4a"  : content_type_audio_regex,
+        ".ogg"  : content_type_audio_regex,
         ".mp4"  : content_type_video_regex,
         ".wmv"  : content_type_video_regex,
+        ".wm"  : content_type_video_regex,
+        ".3gp"  : content_type_video_regex,
         ".mkv"  : content_type_video_regex,
         ".swf"  : content_type_video_regex,
         ".asf"  : content_type_video_regex,

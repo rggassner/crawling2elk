@@ -252,8 +252,8 @@ def do_nothing_url(args):
 
 @function_for_url([r"^https*://", r"^ftp://"])
 def full_url(args):
-    parent_host=urlsplit(args['parent_url'])[1]
-    db_insert_if_new_url(url=args['url'],source="full_url",visited=False,parent_host=parent_host,db=args['db'])
+    parent_host = urlsplit(args['parent_url'])[1]
+    db_insert_if_new_url(url=args['url'], source="full_url", visited=False, parent_host=parent_host, db=args['db'])
     return True
 
 

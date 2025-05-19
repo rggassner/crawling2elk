@@ -123,15 +123,18 @@ async def scan_ips(ip_list, concurrency=4, verbose=False, db=None):
     sem = asyncio.Semaphore(concurrency)
 
     async def bound_check(ip):
-        protocol = get_http_or_https()  # Choose a protocol at random
+        # Choose a protocol at random
+        protocol = get_http_or_https()
         if random.random() < RANDOM_PORT_CHANCE:
-            port = generate_random_port(ports)  # Choose a random non-default port
+            # Choose a random non-default port
+            port = generate_random_port(ports)
         else:
-            port = 80 if protocol == "http" else 443  # Use default ports for HTTP/HTTPS
+            # Use default ports for HTTP/HTTPS
+            port = 80 if protocol == "http" else 443
         async with sem:
             http_code = await check_http(ip, port, protocol, verbose)
             if http_code:
-                save_to_database(ip, port, protocol,http_code,verbose=verbose,db=db)
+                save_to_database(ip, port, protocol, http_code, verbose=verbose, db=db)
     tasks = [bound_check(ip) for ip in ip_list]
     await asyncio.gather(*tasks)
 
@@ -191,7 +194,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # Load ports and their probabilities
     ports = load_nmap_services(SERVICES_INVENTORY)
-    ip_count = 4096  # Number of IPs to scan in each run
+    # Number of IPs to scan in each run
+    ip_count = 4096
     concurrency = MAX_SCANNER_WORKERS
     ip_list = generate_random_ips(ip_count,include_networks=SCAN_NETWORKS,exclude_networks=NOSCAN_NETWORKS)
     asyncio.run(scan_ips(ip_list, concurrency, args.verbose,db=db))

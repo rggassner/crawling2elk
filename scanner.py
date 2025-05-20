@@ -134,18 +134,27 @@ async def scan_ips(ip_list, concurrency=4, verbose=False, db=None):
         async with sem:
             http_code = await check_http(ip, port, protocol, verbose)
             if http_code:
-                save_to_database(ip, port, protocol, http_code, verbose=verbose, db=db)
+                save_to_database(
+                        ip,
+                        port,
+                        protocol,
+                        http_code,
+                        verbose=verbose,
+                        db=db
+                    )
     tasks = [bound_check(ip) for ip in ip_list]
     await asyncio.gather(*tasks)
 
 
 def generate_random_ips(count, include_networks=None, exclude_networks=None):
     """
-    Generate a random list of IPv4 addresses within specified networks, excluding specific ranges.
-    
+    Generate a random list of IPv4 addresses within specified networks,
+    excluding specific ranges.
+
     Args:
         count: Number of IP addresses to generate
-        include_networks: List of network strings (e.g. ['192.168.0.0/24', '10.0.0.0/8'])
+        include_networks: List of network strings (e.g. ['192.168.0.0/24',
+        '10.0.0.0/8'])
                           Default: ['0.0.0.0/0'] (all IPv4 addresses)
         exclude_networks: List of network strings to exclude
                           Default: Global EXCLUDED_NETWORKS

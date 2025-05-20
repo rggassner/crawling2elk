@@ -225,8 +225,22 @@ def remove_jsessionid_with_semicolon(url):
     return cleaned_url
 
 
-def db_insert_if_new_url(url='', isopendir=None, visited=None, source='', content_type='', words='', min_webcontent='', raw_webcontent='',
-                         isnsfw='', resolution='', parent_host='', email=None, db=None, debug=False):
+def db_insert_if_new_url(
+        url='',
+        isopendir=None,
+        visited=None,
+        source='',
+        content_type='',
+        words='',
+        min_webcontent='',
+        raw_webcontent='',
+        isnsfw='',
+        resolution='',
+        parent_host='',
+        email=None,
+        db=None,
+        debug=False
+    ):
 
     if debug:
         print(f"[DEBUG] visited param type: {type(visited)} - value: {visited}")
@@ -1049,4 +1063,3 @@ EXTENSION_MAP = {
         ".webm" : content_type_video_regex,
         ".docx" : content_type_doc_regex,
     }
-

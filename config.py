@@ -137,7 +137,7 @@ SEARCH_WORDS = [
 # since have not matched any regex.
 BE_GREEDY = False
 
-# host_regex_block_list do not crawl these domains. 
+# host_regex_block_list do not crawl these domains.
 host_regex_block_list = [
     r'localhost:4443$',
     r'(^|\.)google$',
@@ -150,7 +150,7 @@ URL_REGEX_BLOCK_LIST = [
 ]
 
 # Only crawl domains that match this regex
-host_regex_allow_list = [r'.*']
+HOST_REGEX_ALLOW_LIST = [r'.*']
 
 # A weight for every method of url picking
 METHOD_WEIGHTS = {
@@ -165,6 +165,7 @@ METHOD_WEIGHTS = {
 
 # Scanner options
 SERVICES_INVENTORY = "/usr/share/nmap/nmap-services"
+
 # Chance for running the algorythm to generate a non conventional port
 RANDOM_PORT_CHANCE = 0.1
 
@@ -185,4 +186,3 @@ NOSCAN_NETWORKS = [
     "100.64.0.0/10",
     "169.254.0.0/16"
 ]
-

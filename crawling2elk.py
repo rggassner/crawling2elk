@@ -75,7 +75,7 @@ def is_host_block_listed(url):
 
 # Verify if url is in a blocklist.
 def is_url_block_listed(url):
-    for regex in url_regex_block_list:
+    for regex in URL_REGEX_BLOCK_LIST:
         if re.search(regex, url, flags=re.I | re.U):
             return True
     return False
@@ -83,7 +83,7 @@ def is_url_block_listed(url):
 
 # Verify if url is in a allowlist.
 def is_host_allow_listed(url):
-    for regex in host_regex_allow_list:
+    for regex in HOST_REGEX_ALLOW_LIST:
         if re.search(regex, url, flags=re.I | re.U):
             return True
     return False
@@ -274,8 +274,14 @@ def email_url(args):
             r"^([A-Za-z0-9]+[.-_])*[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{2,})+$",
             address,
         ):
-            parent_host=urlsplit(args['parent_url'])[1]
-            db_insert_if_new_url(url=args['parent_url'],email=address,source='email_url',parent_host=parent_host,db=args['db'])
+            parent_host = urlsplit(args['parent_url'])[1]
+            db_insert_if_new_url(
+                    url=args['parent_url'],
+                    email=address,
+                    source='email_url',
+                    parent_host=parent_host,
+                    db=args['db']
+                )
             return True
         else:
             return False

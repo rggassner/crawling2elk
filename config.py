@@ -36,7 +36,7 @@ FORCE_IMAGE_LOAD = False
 # This option only makes sense to be activated when you have an external
 # script packing data to database, since all crawler data is already
 # filtered while urls are entering.
-LOOK_FOR_INVALID_URLS = False
+REMOVE_INVALID_URLS = True
 
 # How long will it  wait until consider the url is not responding
 # This will deal with pages asking for basic authentication, and
@@ -137,8 +137,8 @@ SEARCH_WORDS = [
 # since have not matched any regex.
 BE_GREEDY = False
 
-# host_regex_block_list do not crawl these domains.
-host_regex_block_list = [
+# Do not crawl these domains.
+HOST_REGEX_BLOCK_LIST = [
     r'localhost:4443$',
     r'(^|\.)google$',
 ]
@@ -147,6 +147,7 @@ host_regex_block_list = [
 URL_REGEX_BLOCK_LIST = [
     '/noticias/modules/noticias/modules/noticias/modules/',
     '/images/images/images/images/',
+    '/plugins/owlcarousel/plugins',
 ]
 
 # Only crawl domains that match this regex

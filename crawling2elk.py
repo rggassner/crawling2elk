@@ -289,10 +289,10 @@ def email_url(args):
         return False
 
 
-def get_links(soup, content_url,db):
-    #If you want to grep some patterns, use the code below.
-    #pattern=r'"file":{".*?":"(.*?)"}'
-    #for script in soup.find_all('script',type="text/javascript"):
+def get_links(soup, content_url, db):
+    # If you want to grep some patterns, use the code below.
+    # pattern=r'"file":{".*?":"(.*?)"}'
+    # for script in soup.find_all('script',type="text/javascript"):
     #    if re.search(pattern,str(script)):
     #        print(re.search(pattern,str(script))[1])
     tags = soup("a")
@@ -1014,7 +1014,7 @@ def get_least_covered_random_hosts(db, size=100):
         buckets = agg_response.get("aggregations", {}).get("hosts", {}).get("buckets", [])
         hosts = [bucket["key"] for bucket in buckets]
         for bucket in buckets:
-            print('    \033[35m{} \t {}\033[0m'.format(bucket['doc_count'],bucket['key']))
+            print('    \033[35m{}\t-{}-\033[0m'.format(bucket['doc_count'],bucket['key']))
 
         if not hosts:
             continue
@@ -1474,29 +1474,37 @@ def run_fast_extension_pass(db, max_workers=MAX_FAST_WORKERS):
 
 
 def remove_invalid_urls(db):
-    """
-    Deletes documents from Elasticsearch where the 'url' field is invalid, based on urlparse.
+    """ 
+    Deletes documents from Elasticsearch where the 'url' field is invalid 
+    or missing a scheme. Re-inserts sanitized URLs if they change.
     """
     deleted = 0
     query = {"query": {"match_all": {}}}
-
+    
     for doc in helpers.scan(db.es, index=URLS_INDEX, query=query):
         url = doc['_source'].get('url')
         if not url:
             continue
-        pre_url = url
-        url=sanitize_url(url)
-        if pre_url != url :
-            print(f"🧹 Deleted sanitized URL: -{pre_url}- inserting -{url}-")
-            db_insert_if_new_url(url=url, visited=False, source="remove_invalid_urls",db=db)
-            #db.es.delete(index=URLS_INDEX, id=doc['_id'])
-            deleted += 1
-        #if not is_valid_url(url):
-        #    print(f"Sanitized url continues to be invalid!!!!: {url}")
-        #    #db.es.delete(index=URLS_INDEX, id=doc['_id'])
-        #    deleted += 1
-    print(f"\n✅ Done. Total invalid URLs deleted: {deleted}")
 
+        parsed = urlparse(url)
+        pre_url = url
+        url = sanitize_url(url)
+        
+        # Remove if URL changed after sanitization
+        if pre_url != url:
+            print(f"🧹 Deleted sanitized URL: -{pre_url}- inserting -{url}-")
+            db_insert_if_new_url(url=url, visited=False, source="remove_invalid_urls", db=db)
+            db.es.delete(index=URLS_INDEX, id=doc['_id'])
+            deleted += 1
+            continue
+        
+        # Remove if completely missing a scheme (e.g., "www.example.com")
+        if not parsed.scheme:
+            print(f"🚫 Deleted URL with no scheme: -{url}-")
+            db.es.delete(index=URLS_INDEX, id=doc['_id'])
+            deleted += 1
+
+    print(f"\n✅ Done. Total invalid URLs deleted: {deleted}")
 
 def remove_blocked_hosts_from_es_db(db):
     compiled_blocklist = [re.compile(pattern) for pattern in host_regex_block_list]
@@ -1520,6 +1528,28 @@ def remove_blocked_hosts_from_es_db(db):
             db_create_database(INITIAL_URL, db=db)
     print(f"\n✅ Done. Total deleted: {deleted}")
 
+def remove_blocked_urls_from_es_db(db):
+   # Compile path-based regex block list
+    compiled_url_blocklist = [re.compile(pattern) for pattern in URL_REGEX_BLOCK_LIST]
+    def is_blocked_path(path):
+        return any(regex.search(path) for regex in compiled_url_blocklist)
+    deleted = 0
+    query = {"query": {"match_all": {}}}
+    try:
+        for doc in helpers.scan(db.es, index=URLS_INDEX, query=query):
+            url = doc['_source'].get('url')
+            if not url:
+                continue
+            path = urlsplit(url).path or ''
+            if is_blocked_path(path):
+                db.es.delete(index=URLS_INDEX, id=doc['_id'])
+                print(f"🧹 Deleted by path: {url}")
+                deleted += 1
+    except NotFoundError as e:
+        if "index_not_found_exception" in str(e):
+            print("Elasticsearch index missing. Creating now...")
+            db_create_database(INITIAL_URL, db=db)
+    print(f"\n✅ Done. Total deleted by path: {deleted}")
 
 def make_https_app():
     return web.Application([
@@ -1580,9 +1610,11 @@ def main():
         import threading
         threading.Thread(target=start_https_server, daemon=True).start()
         time.sleep(1)  # Give HTTPS server a head start
-        print("Instance 1: And now some housekeeping. Removing urls from hosts that are blocklisted and should be removed.")
+        print("Instance 1: Removing urls from hosts that are blocklisted.")
         remove_blocked_hosts_from_es_db(db)
-        if LOOK_FOR_INVALID_URLS:
+        print("Instance 1: Removing path blocklisted urls.")
+        remove_blocked_urls_from_es_db(db)
+        if REMOVE_INVALID_URLS:
             print("Instance 1: Deleting invalid urls.")
             remove_invalid_urls(db)
         print("Instance 1: Let's go full crawler mode.")

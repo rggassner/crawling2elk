@@ -67,7 +67,7 @@ soup_tag_blocklist = [
 
 # Verify if host is in a blocklist.
 def is_host_block_listed(url):
-    for regex in host_regex_block_list:
+    for regex in HOST_REGEX_BLOCK_LIST:
         if re.search(regex, url, flags=re.I | re.U):
             return True
     return False
@@ -1507,7 +1507,7 @@ def remove_invalid_urls(db):
     print(f"\n✅ Done. Total invalid URLs deleted: {deleted}")
 
 def remove_blocked_hosts_from_es_db(db):
-    compiled_blocklist = [re.compile(pattern) for pattern in host_regex_block_list]
+    compiled_blocklist = [re.compile(pattern) for pattern in HOST_REGEX_BLOCK_LIST]
     def is_blocked(host):
         return any(regex.search(host) for regex in compiled_blocklist)
     deleted = 0

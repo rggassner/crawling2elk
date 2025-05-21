@@ -239,11 +239,7 @@ def db_insert_if_new_url(
         parent_host='',
         email=None,
         db=None,
-        debug=False
-    ):
-
-    if debug:
-        print(f"[DEBUG] visited param type: {type(visited)} - value: {visited}")
+        debug=False):
 
     host = urlsplit(url)[1]
     url = remove_jsessionid_with_semicolon(url)
@@ -252,10 +248,10 @@ def db_insert_if_new_url(
     query = parsed.query
     has_query = bool(query)
     query_dict = parse_qs(query)
-
     query_variables = list(set(query_dict.keys()))
-    query_values = list(set(v for values in query_dict.values() for v in values))
-
+    query_values = list(
+            set(v for values in query_dict.values() for v in values)
+            )
     now_iso = datetime.now(timezone.utc).isoformat()
     doc_id = hash_url(url)
 
@@ -266,7 +262,6 @@ def db_insert_if_new_url(
                 existing_doc = db.con.get(index=URLS_INDEX, id=doc_id)["_source"]
             except Exception:
                 print(f"[DEBUG] Could not fetch existing doc for {url}: {get_err}")
-
 
         # Insert-only fields
         insert_only_fields = {
@@ -577,6 +572,7 @@ content_type_image_regex = [
         r"^image/vnd\.dwg$",    
         r"^image/svg\+xml$",
         r"^image/x-ms-bmp$",        
+        r"^image/vnd\.djvu$",
         r"^image/x-xbitmap$",        
         r"^image/x-photoshop$",         
         r"^image/x-coreldraw$",        
@@ -584,6 +580,7 @@ content_type_image_regex = [
         r"^image/vnd\.wap\.wbmp$",
         r"^image/x\.fb\.keyframes$",        
         r"^image/vnd\.microsoft\.icon$",
+        r"^image/vnd\.adobe\.photoshop$",
         r"^application/jpg$",        
     ]
 
@@ -643,6 +640,7 @@ content_type_plain_text_regex = [
         r"^text/yaml$",
         r"^text/x-go$",
         r"^text/x-js$",
+        r"^text/x-log$",
         r"^text/vcard$",
         r"^text/x-tex$",
         r"^text/plain$",
@@ -689,6 +687,7 @@ content_type_plain_text_regex = [
         r"^application/manifest\+json$",
         r"^application/importmap\+json$",
         r"^application/x-amz-json-1\.1$",
+        r"^text/vnd\.turbo-stream\.html$",
         r"^application/jsoncharset=UTF-8$",
         r"^text/x-comma-separated-values$",
     ]
@@ -792,7 +791,6 @@ content_type_all_others_regex = [
         r"^font/otf$",
         r"^font/font-woff2$",
         r"^application/vnd\.olpc-sugar$",
-        r"^text/vnd\.turbo-stream\.html$",
         r"^application/vnd\.vimeo\.video\+json$",
         r"^application/vnd\.vimeo\.credit\+json$",
         r"^application/vnd\.vimeo\.comment\+json$",
@@ -812,7 +810,6 @@ content_type_all_others_regex = [
         r"^model/vnd\.mts$",
         r"^model/step$",
         r"^multipart/mixed$",
-        r"^image/vnd\.djvu$",
         r"^text/css$",
         r"^text/x-unknown-content-type$",
         r"^text/plaincharset:",
@@ -826,6 +823,7 @@ content_type_all_others_regex = [
         r"^application/rtf$",
         r"^application/csv$",
         r"^application/ttf$",
+        r"^application/x-po$",
         r"^application/mbox$",
         r"^application/epub$",
         r"^application/node$",
@@ -839,6 +837,7 @@ content_type_all_others_regex = [
         r"^application/json$",
         r"^application/x-sh$",
         r"^application/font$",
+        r"^chemical/x-cerius$",
         r"^application/x-rpm$",
         r"^application/x-twb$",
         r"^application/x-msi$",
@@ -927,6 +926,7 @@ content_type_all_others_regex = [
         r"^application/force-download$",
         r"^x-application/octet-stream$",
         r"^application/x-x509-ca-cert$",
+        r"^application/vnd\.visionary$",
         r"^application/grpc-web\+proto$",
         r"^application/x-amz-json-1\.0$",
         r"^application/x-msdos-program$",
@@ -976,8 +976,11 @@ content_type_all_others_regex = [
         r"^application/x-redhat-package-manager$",
         r"^application/vnd\.vimeo\.location\+json$",
         r"^application/opensearchdescription\+xml$",
+        r"^application/vnd\.google-earth\.kml\+xml$",
+        r"^application/vnd\.com\.amazon\.api\+json$",
         r"^application/vnd\.maxmind\.com-city\+json$",
         r"^application/vnd\.initializr\.v2\.2\+json$",
+        r"^application/vnd\.ms-excel\.openxmlformat$",
         r"^application/vnd\.maxmind\.com-error\+json$",
         r"^application/vnd\.radio-canada\.neuro\+json$",
         r"^application/vnd\.vimeo\.profilevideo\+json$",
@@ -986,12 +989,10 @@ content_type_all_others_regex = [
         r"^application/vnd\.maxmind\.com-insights\+json$",
         r"^application/vnd\.adobe\.error-response\+json$",
         r"^application/vnd\.vimeo\.profilesection\+json$",
+        r"^application/vnd\.abc\.terminus\.content\+json$",
         r"^application/vnd\.contentful\.delivery\.v1\+json$",
         r"^application/javascript,application/x-javascript$",
         r"^application/vnd\.spring-boot\.actuator\.v3\+json$",
-        r"^application/vnd\.google-earth\.kml\+xml$",
-        r"^application/vnd\.com\.amazon\.api\+json$",
-        r"^application/vnd\.ms-excel\.openxmlformat$",
         r"^application/vnd\.android\.package-archive$",
         r"^application/vnd\.disney\.error\.v1\.0\+json$",
         r"^application/vnd\.vimeo\.currency\.json\+json$",
@@ -1035,6 +1036,7 @@ EXTENSION_MAP = {
         ".gz"   : content_type_compressed_regex,
         ".7z"   : content_type_compressed_regex,
         ".jpg"  : content_type_image_regex,
+        ".psd"  : content_type_image_regex,
         ".JPG"  : content_type_image_regex,
         ".jpeg" : content_type_image_regex,
         ".png"  : content_type_image_regex,

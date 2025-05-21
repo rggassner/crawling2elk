@@ -158,15 +158,17 @@ def generate_random_ips(count, include_networks=None, exclude_networks=None):
                           Default: ['0.0.0.0/0'] (all IPv4 addresses)
         exclude_networks: List of network strings to exclude
                           Default: Global EXCLUDED_NETWORKS
-        
     Returns:
         List of random IP addresses as strings
     """
     # Convert string networks to IPv4Network objects
     if include_networks is None:
-        include_networks_obj = [IPv4Network('0.0.0.0/0')]  # Default to all IPv4 addresses
+        # Default to all IPv4 addresses
+        include_networks_obj = [IPv4Network('0.0.0.0/0')]
     else:
-        include_networks_obj = [IPv4Network(network) for network in include_networks]
+        include_networks_obj = [
+                IPv4Network(network) for network in include_networks
+                ]
     if exclude_networks is None:
         exclude_networks_obj = EXCLUDED_NETWORKS  # Assuming this is defined globally
     else:

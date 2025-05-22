@@ -259,9 +259,12 @@ def db_insert_if_new_url(
         existing_doc = None
         if debug:
             try:
-                existing_doc = db.con.get(index=URLS_INDEX, id=doc_id)["_source"]
+                existing_doc = db.con.get(
+                        index=URLS_INDEX,
+                        id=doc_id
+                    )["_source"]
             except Exception:
-                print(f"[DEBUG] Could not fetch existing doc for {url}: {get_err}")
+                print(f"[DEBUG] Unable to get doc -{url}-: {get_err}")
 
         # Insert-only fields
         insert_only_fields = {
@@ -479,8 +482,6 @@ content_type_midi_regex=[
 
 content_type_audio_regex=[
         r"^audio/ogg$",
-        r"^audio/x-oggvorbis$",
-        r"^audio/x-pn-realaudio-plugin$",
         r"^audio/mp3$",
         r"^audio/mp4$",
         r"^audio/wav$",
@@ -492,6 +493,7 @@ content_type_audio_regex=[
         r"^audio/x-m4a$",
         r"^audio/x-rpm$",
         r"^audio/x-wav$",
+        r"^audio/x-aiff$",
         r"^audio/x-flac$",
         r"^audio/unknown$",
         r"^audio/mpegurl$",
@@ -500,10 +502,12 @@ content_type_audio_regex=[
         r"^audio/prs\.sid$",
         r"^application/mp3$",
         r"^audio/x-mpegurl$",
+        r"^audio/x-oggvorbis$",
         r"^audio/x-pn-realaudio$",
         r"^application/octetstream$",
-        r"^application/x-octet-stream$",
         r"^application/octet-stream$",
+        r"^application/x-octet-stream$",
+        r"^audio/x-pn-realaudio-plugin$",
         r"^application/vnd\.rn-realmedia$",
     ]
 
@@ -640,6 +644,7 @@ content_type_plain_text_regex = [
         r"^text/yaml$",
         r"^text/x-go$",
         r"^text/x-js$",
+        r"^text/x-csh$",
         r"^text/x-log$",
         r"^text/vcard$",
         r"^text/x-tex$",
@@ -651,9 +656,6 @@ content_type_plain_text_regex = [
         r"^text/x-json$",
         r"^text/x-csrc$",
         r"^text/x-python$",
-        r"^text/x-csh$",
-        r"^text/vnd\.graphviz$",
-        r"^text/vnd\.trolltech\.linguist$",
         r"^text/turtle$",
         r"^text/webloc$",
         r"^text/x-vcard$",
@@ -672,6 +674,7 @@ content_type_plain_text_regex = [
         r"^application/jsonp$",
         r"^text/x-javascript$",
         r"^text/event-stream$",
+        r"^text/vnd\.graphviz$",
         r"^application/ld\+json$",
         r"^application/ion\+json$",
         r"^application/hal\+json$",
@@ -680,6 +683,7 @@ content_type_plain_text_regex = [
         r"^application/stream\+json$",
         r"^application/problem\+json$",
         r"^text/0\.4/hammer\.min\.js$",
+        r"^application/expanded\+json$",
         r"^text/x-handlebars-template$",
         r"^application/vnd\.api\+json$",
         r"^application/x-thrift\+json$",
@@ -688,8 +692,10 @@ content_type_plain_text_regex = [
         r"^application/importmap\+json$",
         r"^application/x-amz-json-1\.1$",
         r"^text/vnd\.turbo-stream\.html$",
+        r"^text/vnd\.trolltech\.linguist$",
         r"^application/jsoncharset=UTF-8$",
         r"^text/x-comma-separated-values$",
+        r"^application/json,application/json$",
     ]
 
 url_all_others_regex =[
@@ -786,6 +792,7 @@ content_type_all_others_regex = [
         r"^\*/\*$",
         r"^woff2$",
         r"^unknown$",
+        r"^text/css$",
         r"^unknown/unknown$",
         r"^font/ttf$",
         r"^font/otf$",
@@ -810,8 +817,6 @@ content_type_all_others_regex = [
         r"^model/vnd\.mts$",
         r"^model/step$",
         r"^multipart/mixed$",
-        r"^text/css$",
-        r"^text/x-unknown-content-type$",
         r"^text/plaincharset:",
         r"^text/javascript$",
         r"^application/\*$",
@@ -927,6 +932,7 @@ content_type_all_others_regex = [
         r"^x-application/octet-stream$",
         r"^application/x-x509-ca-cert$",
         r"^application/vnd\.visionary$",
+        r"^text/x-unknown-content-type$",
         r"^application/grpc-web\+proto$",
         r"^application/x-amz-json-1\.0$",
         r"^application/x-msdos-program$",
@@ -1045,6 +1051,7 @@ EXTENSION_MAP = {
         ".svg"  : content_type_image_regex,
         ".pdf"  : content_type_pdf_regex,
         ".rm"   : content_type_audio_regex,
+        ".aif"   : content_type_audio_regex,
         ".mp3"  : content_type_audio_regex,
         ".wav"  : content_type_audio_regex,
         ".flac" : content_type_audio_regex,

@@ -299,13 +299,14 @@ def get_links(soup, content_url, db):
     for tag in tags:
         url = tag.get("href", None)
 
-        if type(url) != str:
+        if not isinstance(url, str):
             continue
         else:
             url = sanitize_url(url)
         found = False
-        host=urlsplit(url)[1]
-        #the below block ensures that if link takes to a internal directory of the server, it will use the original host
+        host = urlsplit(url)[1]
+        # The block below ensures that if link takes to a internal directory
+        # of the server, it will use the original host
         if host == '':
             host=urlsplit(content_url)[1]
         if not is_host_block_listed(host) and is_host_allow_listed(host) and not is_url_block_listed(url):
@@ -698,7 +699,7 @@ def get_page(url, driver, db):
 
                     try: 
                         content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
-                    except ValueError as e:  # 🛠️ Catch specific Brotli decompression failure
+                    except ValueError as e:  # 🛠 Catch specific Brotli decompression failure
                         if "BrotliDecompress failed" in str(e):
                             db_insert_if_new_url(url=url,visited=True,source='BrotliDecompressFailed',parent_host=parent_host,db=db)
                             continue

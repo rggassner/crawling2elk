@@ -279,7 +279,8 @@ def db_insert_if_new_url(
                 print(f"[Warning] Skipping non-string email: {email}")
 
         if existing_doc is None:
-            insert_only_fields["random_bucket"] = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
+            insert_only_fields["random_bucket"] = random.randint(
+                    0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
 
             if source:
                 insert_only_fields["source"] = source
@@ -289,11 +290,14 @@ def db_insert_if_new_url(
             # Safely extract host and directory levels
             host_parts = get_host_levels(host).get("host_levels", [])
             if len(host_parts) < MAX_HOST_LEVELS:
-                host_parts = [''] * (MAX_HOST_LEVELS - len(host_parts)) + host_parts
+                host_parts = [''] * (
+                        MAX_HOST_LEVELS - len(host_parts)) + host_parts
 
-            dir_parts = get_directory_levels(urlsplit(url).path).get("directory_levels", [])
+            dir_parts = get_directory_levels(
+                    urlsplit(url).path).get("directory_levels", [])
             if len(dir_parts) < MAX_DIR_LEVELS:
-                dir_parts = [''] * (MAX_DIR_LEVELS - len(dir_parts)) + dir_parts
+                dir_parts = [''] * (
+                        MAX_DIR_LEVELS - len(dir_parts)) + dir_parts
 
             # Add levels to insert_only_fields
             insert_only_fields["host_levels"] = host_parts
@@ -308,7 +312,10 @@ def db_insert_if_new_url(
             # Extract file extension if present
             path = unquote(urlsplit(url).path)
             _, file_extension = os.path.splitext(path)
-            file_extension = file_extension.lower().lstrip('.') if file_extension else ''
+            if file_extension:
+                file_extension = file_extension.lower().lstrip('.')
+            else:
+                file_extension = ''
 
             if file_extension:
                 insert_only_fields['file_extension'] = file_extension
@@ -485,6 +492,7 @@ content_type_audio_regex=[
         r"^audio/mp3$",
         r"^audio/mp4$",
         r"^audio/wav$",
+        r"^audio/wave$",
         r"^audio/MP2T$",
         r"^audio/webm$",
         r"^audio/flac$",
@@ -787,25 +795,26 @@ content_type_all_others_regex = [
         r"^json$",
         r"^null$",
         r"^file$",
-        r"^redirect$",
         r"^woff$",
         r"^\*/\*$",
         r"^woff2$",
         r"^unknown$",
         r"^text/css$",
-        r"^unknown/unknown$",
         r"^font/ttf$",
         r"^font/otf$",
+        r"^redirect$",
+        r"^image/otf$",
+        r"^font/woff$",
+        r"^model/step$",
+        r"^font/woff2$",
+        r"^cms/redirect$",
+        r"^font/font-woff$",
+        r"^\(null\)/woff2$",
         r"^font/font-woff2$",
+        r"^unknown/unknown$",
         r"^application/vnd\.olpc-sugar$",
         r"^application/vnd\.vimeo\.video\+json$",
         r"^application/vnd\.vimeo\.credit\+json$",
-        r"^application/vnd\.vimeo\.comment\+json$",
-        r"^application/vnd\.vimeo\.video\.texttrack\+json$",
-        r"^cms/redirect$",
-        r"^font/woff$",
-        r"^font/woff2$",
-        r"^\(null\)/woff2$",
         r"^font/truetype$",
         r"^x-font/ttf$",
         r"^font/sfnt$",
@@ -815,9 +824,7 @@ content_type_all_others_regex = [
         r"^font/x-woff2$",
         r"^font/opentype$",
         r"^model/vnd\.mts$",
-        r"^model/step$",
         r"^multipart/mixed$",
-        r"^text/plaincharset:",
         r"^text/javascript$",
         r"^application/\*$",
         r"^application/js$",
@@ -842,6 +849,7 @@ content_type_all_others_regex = [
         r"^application/json$",
         r"^application/x-sh$",
         r"^application/font$",
+        r"^text/plaincharset:",
         r"^chemical/x-cerius$",
         r"^application/x-rpm$",
         r"^application/x-twb$",
@@ -854,7 +862,7 @@ content_type_all_others_regex = [
         r"^application/x-perl$",
         r"^application/binary$",
         r"^application/msword$",
-        r"^application/msword$",
+        r"^application/turtle$",
         r"^application/x-doom$",
         r"^application/x-woff$",
         r"^application/x-trash$",
@@ -877,6 +885,7 @@ content_type_all_others_regex = [
         r"^application/x-subrip$",
         r"^application/x-bibtex$",
         r"^application/pkix-crl$",
+        r"^application/n-triples$",
         r"^application/vnd\.smaf$",
         r"^application/geo\+json$",
         r"^application/font-sfnt$",
@@ -890,6 +899,7 @@ content_type_all_others_regex = [
         r"^application/pkix-cert$",
         r"^application/font-woff$",
         r"^application/smil\+xml$",
+        r"^application/feed\+json$",
         r"^application/x-director$",
         r"^application/postscript$",
         r"^application/x-font-ttf$",
@@ -909,6 +919,7 @@ content_type_all_others_regex = [
         r"^application/x-httpd-php$",
         r"^application/x-directory$",
         r"^application/x-troff-man$",
+        r"^application/encrypted-v2$",
         r"^application/x-bittorrent$",
         r"^application/java-archive$",
         r"^application/x-javascript$",
@@ -932,6 +943,7 @@ content_type_all_others_regex = [
         r"^x-application/octet-stream$",
         r"^application/x-x509-ca-cert$",
         r"^application/vnd\.visionary$",
+        r"^application/activity\+json$",
         r"^text/x-unknown-content-type$",
         r"^application/grpc-web\+proto$",
         r"^application/x-amz-json-1\.0$",
@@ -939,6 +951,7 @@ content_type_all_others_regex = [
         r"^application/x-font-truetype$",
         r"^application/x-font-opentype$",
         r"^application/x-iso9660-image$",
+        r"^application/x-csp-hyperevent$",
         r"^application/vnd\.siren\+json$",
         r"^application/x-ms-application$",
         r"^application/vnd\.ms-opentype$",
@@ -973,6 +986,7 @@ content_type_all_others_regex = [
         r"^application/graphql-response\+json$",
         r"^application/speculationrules\+json$",
         r"^application/vnd\.vimeo\.user\+json$",
+        r"^application/octet-stream,text/html$",
         r"^application/x-research-info-systems$",
         r"^application/vnd\.mapbox-vector-tile$",
         r"^application/amazonui-streaming-json$",
@@ -980,6 +994,8 @@ content_type_all_others_regex = [
         r"^application/vnd\.cas\.services\+yaml$",
         r"^application/vnd.inveniordm\.v1\+json$",
         r"^application/x-redhat-package-manager$",
+        r"^application/octet-streamCharset=UTF-8$",
+        r"^application/vnd\.vimeo\.comment\+json$",
         r"^application/vnd\.vimeo\.location\+json$",
         r"^application/opensearchdescription\+xml$",
         r"^application/vnd\.google-earth\.kml\+xml$",
@@ -988,18 +1004,20 @@ content_type_all_others_regex = [
         r"^application/vnd\.initializr\.v2\.2\+json$",
         r"^application/vnd\.ms-excel\.openxmlformat$",
         r"^application/vnd\.maxmind\.com-error\+json$",
+        r"^application/vnd\.android\.package-archive$",
         r"^application/vnd\.radio-canada\.neuro\+json$",
         r"^application/vnd\.vimeo\.profilevideo\+json$",
         r"^application/vnd\.oracle\.adf\.version\+json$",
         r"^application/vnd\.maxmind\.com-country\+json$",
+        r"^application/vnd\.treasuredata\.v1\.js\+json$",
         r"^application/vnd\.maxmind\.com-insights\+json$",
         r"^application/vnd\.adobe\.error-response\+json$",
         r"^application/vnd\.vimeo\.profilesection\+json$",
         r"^application/vnd\.abc\.terminus\.content\+json$",
+        r"^application/vnd\.vimeo\.video\.texttrack\+json$",
         r"^application/vnd\.contentful\.delivery\.v1\+json$",
         r"^application/javascript,application/x-javascript$",
         r"^application/vnd\.spring-boot\.actuator\.v3\+json$",
-        r"^application/vnd\.android\.package-archive$",
         r"^application/vnd\.disney\.error\.v1\.0\+json$",
         r"^application/vnd\.vimeo\.currency\.json\+json$",
         r"^application/vnd\.vimeo\.marketplace\.skill\+json$",
@@ -1051,7 +1069,7 @@ EXTENSION_MAP = {
         ".svg"  : content_type_image_regex,
         ".pdf"  : content_type_pdf_regex,
         ".rm"   : content_type_audio_regex,
-        ".aif"   : content_type_audio_regex,
+        ".aif"  : content_type_audio_regex,
         ".mp3"  : content_type_audio_regex,
         ".wav"  : content_type_audio_regex,
         ".flac" : content_type_audio_regex,
@@ -1059,7 +1077,7 @@ EXTENSION_MAP = {
         ".ogg"  : content_type_audio_regex,
         ".mp4"  : content_type_video_regex,
         ".wmv"  : content_type_video_regex,
-        ".wm"  : content_type_video_regex,
+        ".wm"   : content_type_video_regex,
         ".3gp"  : content_type_video_regex,
         ".mkv"  : content_type_video_regex,
         ".swf"  : content_type_video_regex,

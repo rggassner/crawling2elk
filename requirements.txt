@@ -12,3 +12,4 @@ tornado
 elasticsearch==8.17.2
 aiohttp
 requests
+googlesearch-python

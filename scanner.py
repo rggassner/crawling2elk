@@ -173,11 +173,14 @@ def generate_random_ips(count, include_networks=None, exclude_networks=None):
         # Assuming this is defined globally
         exclude_networks_obj = EXCLUDED_NETWORKS
     else:
-        exclude_networks_obj = [IPv4Network(network) for network in exclude_networks]
+        for network in exclude_networks:
+            ipv4_net = IPv4Network(network)
+            exclude_networks_obj.append(ipv4_net)
+
     # Calculate the total number of IPs in all included networks
     network_ranges = []
     total_ips = 0
-    
+
     for network in include_networks_obj:
         size = network.num_addresses
         network_ranges.append((total_ips, total_ips + size - 1, network))
@@ -212,3 +215,4 @@ if __name__ == "__main__":
     ip_list = generate_random_ips(ip_count,include_networks=SCAN_NETWORKS,exclude_networks=NOSCAN_NETWORKS)
     asyncio.run(scan_ips(ip_list, concurrency, args.verbose,db=db))
     print("Scan completed.")
+

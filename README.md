@@ -79,7 +79,7 @@ This is a modular, scalable web crawling framework built for advanced scraping, 
 
 You’ll need the following installed:
 
-`apt install pyenv nmap chromium-chromedriver expect`
+`apt install pyenv nmap chromium-chromedriver expect npm`
 
 Python 3.11.11 is recommended:
 

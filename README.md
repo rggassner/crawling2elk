@@ -79,7 +79,13 @@ This is a modular, scalable web crawling framework built for advanced scraping, 
 
 You’ll need the following installed:
 
-`apt install pyenv nmap chromium-chromedriver expect npm`
+`apt install pyenv nmap chromium-chromedriver expect`
+
+Install elasticdump via npm if you plan to backup/restore:
+
+`apt install npm`
+
+`npm install -g elasticdump`
 
 Python 3.11.11 is recommended:
 

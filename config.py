@@ -64,6 +64,9 @@ PDFS_FOLDER = 'pdfs'
 DOWNLOAD_DOCS = False
 DOCS_FOLDER = 'docs'
 
+DOWNLOAD_FONTS = False
+FONTS_FOLDER = 'fonts'
+
 DOWNLOAD_VIDEOS = False
 VIDEOS_FOLDER = 'videos'
 
@@ -145,7 +148,7 @@ HOST_REGEX_BLOCK_LIST = [
 
 # Do not crawl urls that match any of these regexes
 URL_REGEX_BLOCK_LIST = [
-    '/noticias/modules/noticias/modules/noticias/modules/',
+    '/noticias/modules/noticias/modules/',
     '/images/images/images/images/',
     '/plugins/owlcarousel/plugins',
 ]

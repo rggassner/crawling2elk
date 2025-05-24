@@ -205,7 +205,9 @@ def generate_random_ips(count, include_networks=None, exclude_networks=None):
 
 if __name__ == "__main__":
     db = DatabaseConnection()
-    parser = argparse.ArgumentParser(description="Scan IP addresses for open ports and services.")
+    parser = argparse.ArgumentParser(
+            description="Scan IP addresses for open ports and services."
+        )
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
     args = parser.parse_args()
     # Load ports and their probabilities
@@ -216,4 +218,3 @@ if __name__ == "__main__":
     ip_list = generate_random_ips(ip_count,include_networks=SCAN_NETWORKS,exclude_networks=NOSCAN_NETWORKS)
     asyncio.run(scan_ips(ip_list, concurrency, args.verbose,db=db))
     print("Scan completed.")
-

@@ -309,17 +309,21 @@ def get_links(soup, content_url, db):
         # of the server, it will use the original host
         if host == '':
             host = urlsplit(content_url)[1]
-        if not is_host_block_listed(host) and is_host_allow_listed(host) and not is_url_block_listed(url):
+        if (
+            not is_host_block_listed(host)
+            and is_host_allow_listed(host)
+            and not is_url_block_listed(url)
+        ):
             for regex, function in url_functions:
                 m = regex.search(url)
                 if m:
                     found = True
-                    function({'url':url,'parent_url':content_url,'db':db})
+                    function({'url': url, 'parent_url': content_url, 'db': db})
                     continue
             if not found:
                 out_url = urljoin(content_url, url)
-                print("Unexpected URL -{}- Reference URL -{}-".format(url, content_url))
-                print("Unexpected URL. Would this work? -{}-".format(out_url))   
+                print("Unexpected URL -{}- Ref -{}-".format(url, content_url))
+                print("Unexpected URL. Would this work? -{}-".format(out_url))
                 parent_host=urlsplit(content_url)[1]
                 if BE_GREEDY:
                     db_insert_if_new_url(url=out_url,source="get_links",visited=False,parent_host=parent_host,db=db)
@@ -620,6 +624,43 @@ def content_type_docs(args):
         name_part = name_part[:max_name_length - 3] + "..."
     safe_filename = f"{url_hash}-{name_part}{ext}"
     filepath = os.path.join(DOCS_FOLDER, safe_filename)
+    with open(filepath, "wb") as f:
+        f.write(args['content'])
+    return True
+
+
+@function_for_content_type(content_type_font_regex)
+def content_type_fonts(args):
+    db_insert_if_new_url(
+        url=args['url'],
+        content_type=args['content_type'],
+        isopendir=False,
+        visited=True,
+        source='content_type_fonts',
+        parent_host=args['parent_host'],
+        db=args['db']
+    )
+    if not DOWNLOAD_FONTS:
+        return True
+    url = args['url']
+    base_filename = os.path.basename(urlparse(url).path)
+    try:
+        decoded_name = unquote(base_filename)
+    except Exception:
+        decoded_name = base_filename
+    # Separate extension (e.g., ".pdf")
+    name_part, ext = os.path.splitext(decoded_name)
+    # Sanitize both parts
+    name_part = re.sub(r"[^\w\-.]", "_", name_part)
+    ext = re.sub(r"[^\w\-.]", "_", ext)
+    # Create URL hash prefix (always fixed length)
+    url_hash = hashlib.sha256(url.encode()).hexdigest()
+    # Max length for entire filename (255) minus hash + dash + extension + safety margin
+    max_name_length = MAX_FILENAME_LENGTH - len(url_hash) - 1 - len(ext)
+    if len(name_part) > max_name_length:
+        name_part = name_part[:max_name_length - 3] + "..."
+    safe_filename = f"{url_hash}-{name_part}{ext}"
+    filepath = os.path.join(FONTS_FOLDER, safe_filename)
     with open(filepath, "wb") as f:
         f.write(args['content'])
     return True
@@ -1384,6 +1425,7 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
 
                 needs_download = (
                     (function.__name__ == "content_type_docs" and DOWNLOAD_DOCS) or
+                    (function.__name__ == "content_type_fonts" and DOWNLOAD_FONTS) or
                     (function.__name__ == "content_type_pdfs" and DOWNLOAD_PDFS) or
                     (function.__name__ == "content_type_compresseds" and DOWNLOAD_COMPRESSEDS) or
                     (function.__name__ == "content_type_audios" and DOWNLOAD_AUDIOS) or

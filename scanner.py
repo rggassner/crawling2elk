@@ -173,6 +173,7 @@ def generate_random_ips(count, include_networks=None, exclude_networks=None):
         # Assuming this is defined globally
         exclude_networks_obj = EXCLUDED_NETWORKS
     else:
+        exclude_networks_obj = []
         for network in exclude_networks:
             ipv4_net = IPv4Network(network)
             exclude_networks_obj.append(ipv4_net)

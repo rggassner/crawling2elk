@@ -324,9 +324,13 @@ def get_links(soup, content_url, db):
                 out_url = urljoin(content_url, url)
                 print("Unexpected URL -{}- Ref -{}-".format(url, content_url))
                 print("Unexpected URL. Would this work? -{}-".format(out_url))
-                parent_host=urlsplit(content_url)[1]
+                parent_host = urlsplit(content_url)[1]
                 if BE_GREEDY:
-                    db_insert_if_new_url(url=out_url,source="get_links",visited=False,parent_host=parent_host,db=db)
+                    db_insert_if_new_url(url=out_url,
+                                         source="get_links",
+                                         visited=False,
+                                         parent_host=parent_host,
+                                         db=db)
     return True
 
 
@@ -339,7 +343,7 @@ def function_for_content_type(regexp_list):
 
 
 def get_directory_tree(url):
-    #Host will have scheme, hostname and port
+    # Host will have scheme, hostname and port
     host='://'.join(urlsplit(url)[:2])
     dtree=[]
     for iter in range(1,len(PurePosixPath(unquote(urlparse(url).path)).parts[0:])):
@@ -661,6 +665,43 @@ def content_type_fonts(args):
         name_part = name_part[:max_name_length - 3] + "..."
     safe_filename = f"{url_hash}-{name_part}{ext}"
     filepath = os.path.join(FONTS_FOLDER, safe_filename)
+    with open(filepath, "wb") as f:
+        f.write(args['content'])
+    return True
+
+
+@function_for_content_type(content_type_torrent_regex)
+def content_type_torrents(args):
+    db_insert_if_new_url(
+        url=args['url'],
+        content_type=args['content_type'],
+        isopendir=False,
+        visited=True,
+        source='content_type_torrents',
+        parent_host=args['parent_host'],
+        db=args['db']
+    )
+    if not DOWNLOAD_TORRENTS:
+        return True
+    url = args['url']
+    base_filename = os.path.basename(urlparse(url).path)
+    try:
+        decoded_name = unquote(base_filename)
+    except Exception:
+        decoded_name = base_filename
+    # Separate extension (e.g., ".pdf")
+    name_part, ext = os.path.splitext(decoded_name)
+    # Sanitize both parts
+    name_part = re.sub(r"[^\w\-.]", "_", name_part)
+    ext = re.sub(r"[^\w\-.]", "_", ext)
+    # Create URL hash prefix (always fixed length)
+    url_hash = hashlib.sha256(url.encode()).hexdigest()
+    # Max length for entire filename (255) minus hash + dash + extension + safety margin
+    max_name_length = MAX_FILENAME_LENGTH - len(url_hash) - 1 - len(ext)
+    if len(name_part) > max_name_length:
+        name_part = name_part[:max_name_length - 3] + "..."
+    safe_filename = f"{url_hash}-{name_part}{ext}"
+    filepath = os.path.join(TORRENTS_FOLDER, safe_filename)
     with open(filepath, "wb") as f:
         f.write(args['content'])
     return True
@@ -1426,6 +1467,7 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
                 needs_download = (
                     (function.__name__ == "content_type_docs" and DOWNLOAD_DOCS) or
                     (function.__name__ == "content_type_fonts" and DOWNLOAD_FONTS) or
+                    (function.__name__ == "content_type_torrents" and DOWNLOAD_TORRENTS) or
                     (function.__name__ == "content_type_pdfs" and DOWNLOAD_PDFS) or
                     (function.__name__ == "content_type_compresseds" and DOWNLOAD_COMPRESSEDS) or
                     (function.__name__ == "content_type_audios" and DOWNLOAD_AUDIOS) or

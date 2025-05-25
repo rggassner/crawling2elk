@@ -73,6 +73,9 @@ VIDEOS_FOLDER = 'videos'
 DOWNLOAD_ALL_IMAGES = False
 IMAGES_FOLDER = 'images'
 
+DOWNLOAD_TORRENTS = False
+TORRENTS_FOLDER = 'torrents'
+
 DOWNLOAD_COMPRESSEDS = False
 COMPRESSEDS_FOLDER = 'compressed'
 
@@ -150,7 +153,7 @@ HOST_REGEX_BLOCK_LIST = [
 URL_REGEX_BLOCK_LIST = [
     '/noticias/modules/noticias/modules/',
     '/images/images/images/images/',
-    '/plugins/owlcarousel/plugins',
+    '/plugins/owlcarousel/plugins/',
 ]
 
 # Only crawl domains that match this regex

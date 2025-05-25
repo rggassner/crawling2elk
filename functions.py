@@ -359,8 +359,8 @@ def db_insert_if_new_url(
                         continue
                     old_value = existing_doc.get(key, None)
                     if key != "visited" and old_value != new_value:
-                        print(f"[DEBUG] INSERT - Comparing update for URL: {url}")
-                        print(f"  🔄 {key}: '{old_value}' ➡ '{new_value}'")
+                        print(f"[DEBUG] INSERT - Comparing update: {url}")
+                        print(f"  {key}: '{old_value}' ➡ '{new_value}'")
             else:
                 print(f"[DEBUG] INSERT - New document for URL: {url}")
 
@@ -383,23 +383,32 @@ def db_insert_if_new_url(
             doc["email"] = email
 
         for key in doc:
+
             if key == "visited":
-                script_lines.append("""
-                    if (!ctx._source.containsKey('visited') || ctx._source.visited == false) {
+                script_lines.append(
+                    """
+                    if (!ctx._source.containsKey('visited') ||
+                        ctx._source.visited == false) {
                         ctx._source.visited = params.visited;
                         has_updated = true;
                     }
-                """)
+                    """
+                )
+
             else:
-                script_lines.append(f"""
+                script_lines.append(
+                    f"""
                     if (params.containsKey('{key}')) {{
-                        def old_val = ctx._source.containsKey('{key}') ? ctx._source['{key}'] : null;
+                        def old_val = ctx._source.containsKey('{key}')
+                                      ? ctx._source['{key}']
+                                      : null;
                         if (old_val != params['{key}']) {{
                             ctx._source['{key}'] = params['{key}'];
                             has_updated = true;
                         }}
                     }}
-                """)
+                    """
+                )
 
         script_lines.append("if (has_updated) { ctx._source.updated_at = params.updated_at; }")
         script = "\n".join(script_lines)
@@ -408,7 +417,7 @@ def db_insert_if_new_url(
         try:
             upsert_doc = {**insert_only_fields, **doc}
         except Exception as merge_err:
-            print("[DEBUG] 🔥 Error merging insert_only_fields and doc")
+            print("[DEBUG] Error merging insert_only_fields and doc")
             print("  insert_only_fields:", insert_only_fields)
             print("  doc:", doc)
             raise merge_err
@@ -607,12 +616,21 @@ content_type_image_regex = [
     ]
 
 content_type_doc_regex = [
-        r"^application/vnd\.openxmlformats-officedocument\.wordprocessingml\.document$",
-        r"^application/vnd\.openxmlformats-officedocument\.wordprocessingml\.template$",
-        r"^application/docx$",
         r"^application/doc$",
+        r"^application/xlsx$",
+        r"^application/docx$",
+        r"^application/xls$",
         r"^application/vnd\.ms-word\.document\.12$",
         r"^application/vnd\.oasis\.opendocument\.text$",
+        r"^application/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet$",
+        r"^application/vnd\.openxmlformats-officedocument\.presentationml\.slideshow",
+        r"^application/vnd\.openxmlformats-officedocument\.wordprocessingml\.document$",
+        r"^application/vnd\.openxmlformats-officedocument\.wordprocessingml\.template$",
+        r"^application/vnd\.openxmlformats-officedocument\.presentationml\.presentation$",
+        ]
+
+content_type_torrent_regex = [
+        r"^application/x-bittorrent$",
         ]
 
 content_type_font_regex = [
@@ -848,25 +866,26 @@ content_type_all_others_regex = [
         r"^unknown$",
         r"^text/css$",
         r"^redirect$",
+        r"^model/usd$",
+        r"^model/stl$",
+        r"^model/obj$",
         r"^image/otf$",
         r"^model/step$",
-        r"^cms/redirect$",
-        r"^unknown/unknown$",
-        r"^application/empty$",
-        r"^application/x-cbr$",
-        r"^application/vnd\.olpc-sugar$",
-        r"^application/vnd\.vimeo\.video\+json$",
-        r"^application/vnd\.vimeo\.credit\+json$",
         r"^(null)/ico$",
+        r"^Content-Type$",
+        r"^octet/stream$",
+        r"^cms/redirect$",
+        r"^\(null\)/ico$",
         r"^text/x-matlab$",
         r"^application/js$",
         r"^application/\*$",
         r"^model/vnd\.mts$",
+        r"^application/jsv$",
+        r"^unknown/unknown$",
         r"^multipart/mixed$",
         r"^text/javascript$",
         r"^application/xml$",
         r"^application/x-j$",
-        r"^application/xls$",
         r"^application/jwt$",
         r"^application/rtf$",
         r"^application/csv$",
@@ -874,7 +893,6 @@ content_type_all_others_regex = [
         r"^application/mbox$",
         r"^application/epub$",
         r"^application/node$",
-        r"^application/xlsx$",
         r"^application/wasm$",
         r"^application/mobi$",
         r"^application/save$",
@@ -882,6 +900,8 @@ content_type_all_others_regex = [
         r"^application/zlib$",
         r"^application/json$",
         r"^application/x-sh$",
+        r"^application/empty$",
+        r"^application/x-cbr$",
         r"^text/plaincharset:",
         r"^chemical/x-cerius$",
         r"^application/x-rpm$",
@@ -942,7 +962,6 @@ content_type_all_others_regex = [
         r"^application/x-directory$",
         r"^application/x-troff-man$",
         r"^application/encrypted-v2$",
-        r"^application/x-bittorrent$",
         r"^application/java-archive$",
         r"^application/x-javascript$",
         r"^application/x-msdownload$",
@@ -951,6 +970,7 @@ content_type_all_others_regex = [
         r"^application/x-executable$",
         r"^application/marcxml\+xml$",
         r"^application/v3\.25\+json$",
+        r"^multipart/x-mixed-replace$",
         r"^application/pgp-encrypted$",
         r"^application/x-base64-frpc$",
         r"^application/pgp-signature$",
@@ -965,6 +985,7 @@ content_type_all_others_regex = [
         r"^application/x-x509-ca-cert$",
         r"^application/vnd\.visionary$",
         r"^application/activity\+json$",
+        r"^application/vnd\.olpc-sugar$",
         r"^text/x-unknown-content-type$",
         r"^application/grpc-web\+proto$",
         r"^application/x-amz-json-1\.0$",
@@ -981,6 +1002,13 @@ content_type_all_others_regex = [
         r"^application/x-java-jnlp-file$",
         r"^application/x-httpd-ea-php71$",
         r"^Content-Type:application/json$",
+        r"^model/gltf-binary$",
+        r"^binary/octet-stream$",
+        r"^multipart/form-data$",
+        r"^httpd/unix-directory$",
+        r"^javascript charset=UTF-8$",
+        r"^applications/javascript$",
+        r"^javascriptcharset=UTF-8$",
         r"^application/vnd\.ogc\.wms_xml$",
         r"^application/x-apple-diskimage$",
         r"^application/x-chrome-extension$",
@@ -1005,10 +1033,12 @@ content_type_all_others_regex = [
         r"^application/speculationrules\+json$",
         r"^application/vnd\.vimeo\.user\+json$",
         r"^application/octet-stream,text/html$",
+        r"^application/vnd\.vimeo\.video\+json$",
         r"^application/x-research-info-systems$",
         r"^application/vnd\.mapbox-vector-tile$",
         r"^application/amazonui-streaming-json$",
         r"^application/vnd\.vimeo\.error\+json$",
+        r"^application/vnd\.vimeo\.credit\+json$",
         r"^application/vnd\.cas\.services\+yaml$",
         r"^application/vnd.inveniordm\.v1\+json$",
         r"^application/x-redhat-package-manager$",
@@ -1018,6 +1048,8 @@ content_type_all_others_regex = [
         r"^application/opensearchdescription\+xml$",
         r"^application/vnd\.google-earth\.kml\+xml$",
         r"^application/vnd\.com\.amazon\.api\+json$",
+        r"^application/vnd\.treasuredata\.v1\+json$",
+        r"^application/vnd\.mangahigh\.api-v1\+json$",
         r"^application/vnd\.maxmind\.com-city\+json$",
         r"^application/vnd\.initializr\.v2\.2\+json$",
         r"^application/vnd\.ms-excel\.openxmlformat$",
@@ -1046,71 +1078,61 @@ content_type_all_others_regex = [
         r"^application/vnd\.ms-excel\.sheet\.macroenabled\.12$",
         r"^application/vnd.oasis.opendocument.formula-template$",
         r"^application/vnd\.openxmlformats-officedocument\.spre$",
-        r"^application/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet$",
-        r"^application/vnd\.openxmlformats-officedocument\.presentationml\.slideshow",
-        r"^application/vnd\.openxmlformats-officedocument\.presentationml\.presentation$",
-        r"^applications/javascript$",
-        r"^httpd/unix-directory$",
-        r"^binary/octet-stream$",
-        r"^Content-Type$",
-        r"^javascript charset=UTF-8$",
-        r"^javascriptcharset=UTF-8$",
-        r"^model/usd$",
-        r"^model/stl$",
-        r"^model/obj$",
-        r"^model/gltf-binary$",
-        r"^multipart/form-data$",
-        r"^multipart/x-mixed-replace$",
-        r"^octet/stream$",
+        r"^application/vnd\.vmware\.horizon\.manager\.branding\+json$",
     ]
 
-#When creating a new content_type group, you'll have to change also the "predownload" in other function
+# When creating a new content_type group, you'll have to change the
+# needs_download variable in fast_extension_crawler function
 EXTENSION_MAP = {
-        ".midi" : content_type_midi_regex,
-        ".mid"  : content_type_midi_regex,
-        ".Mid"  : content_type_midi_regex,
-        ".zip"  : content_type_compressed_regex,
-        ".bz2"  : content_type_compressed_regex,
-        ".lz"   : content_type_compressed_regex,
-        ".Z"    : content_type_compressed_regex,
-        ".rar"  : content_type_compressed_regex,
-        ".gz"   : content_type_compressed_regex,
-        ".7z"   : content_type_compressed_regex,
-        ".jpg"  : content_type_image_regex,
-        ".psd"  : content_type_image_regex,
-        ".JPG"  : content_type_image_regex,
-        ".jpeg" : content_type_image_regex,
-        ".png"  : content_type_image_regex,
-        ".PNG"  : content_type_image_regex,
-        ".gif"  : content_type_image_regex,
-        ".svg"  : content_type_image_regex,
-        ".pdf"  : content_type_pdf_regex,
-        ".rm"   : content_type_audio_regex,
-        ".aif"  : content_type_audio_regex,
-        ".mp3"  : content_type_audio_regex,
-        ".aac"  : content_type_audio_regex,
-        ".wav"  : content_type_audio_regex,
-        ".flac" : content_type_audio_regex,
-        ".m4a"  : content_type_audio_regex,
-        ".ogg"  : content_type_audio_regex,
-        ".mp4"  : content_type_video_regex,
-        ".wmv"  : content_type_video_regex,
-        ".wm"   : content_type_video_regex,
-        ".3gp"  : content_type_video_regex,
-        ".mkv"  : content_type_video_regex,
-        ".swf"  : content_type_video_regex,
-        ".asf"  : content_type_video_regex,
-        ".ogv"  : content_type_video_regex,
-        ".mov"  : content_type_video_regex,
-        ".flv"  : content_type_video_regex,
-        ".mpg"  : content_type_video_regex,
-        ".mpeg" : content_type_video_regex,
-        ".webm" : content_type_video_regex,
-        ".docx" : content_type_doc_regex,
-        ".ttf"  : content_type_font_regex,
-        ".otf"  : content_type_font_regex,
-        ".eot"  : content_type_font_regex,
-        ".woff2": content_type_font_regex,
-        ".woff" : content_type_font_regex,
-        ".TTF"  : content_type_font_regex,
+        ".midi"     : content_type_midi_regex,
+        ".mid"      : content_type_midi_regex,
+        ".Mid"      : content_type_midi_regex,
+        ".zip"      : content_type_compressed_regex,
+        ".bz2"      : content_type_compressed_regex,
+        ".lz"       : content_type_compressed_regex,
+        ".Z"        : content_type_compressed_regex,
+        ".rar"      : content_type_compressed_regex,
+        ".gz"       : content_type_compressed_regex,
+        ".7z"       : content_type_compressed_regex,
+        ".jpg"      : content_type_image_regex,
+        ".psd"      : content_type_image_regex,
+        ".tiff"     : content_type_image_regex,
+        ".JPG"      : content_type_image_regex,
+        ".jpeg"     : content_type_image_regex,
+        ".png"      : content_type_image_regex,
+        ".PNG"      : content_type_image_regex,
+        ".gif"      : content_type_image_regex,
+        ".svg"      : content_type_image_regex,
+        ".pdf"      : content_type_pdf_regex,
+        ".rm"       : content_type_audio_regex,
+        ".aif"      : content_type_audio_regex,
+        ".mp3"      : content_type_audio_regex,
+        ".aac"      : content_type_audio_regex,
+        ".wav"      : content_type_audio_regex,
+        ".flac"     : content_type_audio_regex,
+        ".m4a"      : content_type_audio_regex,
+        ".ogg"      : content_type_audio_regex,
+        ".mp4"      : content_type_video_regex,
+        ".wmv"      : content_type_video_regex,
+        ".wm"       : content_type_video_regex,
+        ".3gp"      : content_type_video_regex,
+        ".mkv"      : content_type_video_regex,
+        ".swf"      : content_type_video_regex,
+        ".asf"      : content_type_video_regex,
+        ".ogv"      : content_type_video_regex,
+        ".mov"      : content_type_video_regex,
+        ".MOV"      : content_type_video_regex,
+        ".flv"      : content_type_video_regex,
+        ".mpg"      : content_type_video_regex,
+        ".mpeg"     : content_type_video_regex,
+        ".webm"     : content_type_video_regex,
+        ".docx"     : content_type_doc_regex,
+        ".torrent"  : content_type_torrent_regex,
+        ".ttf"      : content_type_font_regex,
+        ".otf"      : content_type_font_regex,
+        ".eot"      : content_type_font_regex,
+        ".woff2"    : content_type_font_regex,
+        ".woff"     : content_type_font_regex,
+        ".TTF"      : content_type_font_regex,
     }
+

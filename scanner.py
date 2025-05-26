@@ -219,7 +219,8 @@ if __name__ == "__main__":
     # Number of IPs to scan in each run
     ip_count = 4096
     concurrency = MAX_SCANNER_WORKERS
-    ip_list = generate_random_ips(ip_count,include_networks=SCAN_NETWORKS,exclude_networks=NOSCAN_NETWORKS)
-    asyncio.run(scan_ips(ip_list, concurrency, args.verbose,db=db))
+    ip_list = generate_random_ips(ip_count,
+                                  include_networks=SCAN_NETWORKS,
+                                  exclude_networks=NOSCAN_NETWORKS)
+    asyncio.run(scan_ips(ip_list, concurrency, args.verbose, db=db))
     print("Scan completed.")
-

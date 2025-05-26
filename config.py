@@ -4,6 +4,12 @@
 # INITIAL_URL = 'https://crawler-test.com/'
 INITIAL_URL = 'https://crawler-test.com/'
 
+# If you input urls using files, feed them here
+# Urls will be delete from files after crawling
+# and files will be deleted when empty
+INPUT_DIR = "input_url_files"
+MAX_URLS_FROM_FILE = 100
+
 # Elasticsearch connection configuration
 ELASTICSEARCH_HOST = "127.0.0.1"
 ELASTICSEARCH_PORT = 9200
@@ -161,11 +167,10 @@ HOST_REGEX_ALLOW_LIST = [r'.*']
 
 # A weight for every method of url picking
 METHOD_WEIGHTS = {
-    "from_file":    0,
     "web_search":   1,
     "fewest_urls":  1,
     "less_visited": 1,
-    "oldest":       1,
+    "oldest":       2,
     "host_prefix":  1,
     "random":       1
 }

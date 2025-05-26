@@ -344,9 +344,9 @@ def function_for_content_type(regexp_list):
 
 def get_directory_tree(url):
     # Host will have scheme, hostname and port
-    host='://'.join(urlsplit(url)[:2])
-    dtree=[]
-    for iter in range(1,len(PurePosixPath(unquote(urlparse(url).path)).parts[0:])):
+    host = '://'.join(urlsplit(url)[:2])
+    dtree = []
+    for iter in range(1, len(PurePosixPath(unquote(urlparse(url).path)).parts[0:])):
         dtree.append(str(host+'/'+'/'.join(PurePosixPath(unquote(urlparse(url).path)).parts[1:-iter])))
     return dtree
 
@@ -971,7 +971,6 @@ def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
     # Default weights if none provided
     if METHOD_WEIGHTS is None:
         method_weights = {
-            "from_file":    0,
             "web_search":   0,
             "fewest_urls":  1,
             "less_visited": 2,
@@ -996,7 +995,6 @@ def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
 
     # Set up method mapping
     method_functions = {
-        "from_file": lambda: get_url_from_file(),
         "web_search": lambda: get_urls_from_web_search(),
         "fewest_urls": lambda: get_least_covered_random_hosts(db, size=size),
         "less_visited": lambda: get_urls_from_least_visited_hosts(db, size=size),
@@ -1039,22 +1037,6 @@ def get_urls_from_web_search():
         urls.append({"url": url, "host": host})
     random.shuffle(urls)
     return urls
-
-
-def get_url_from_file():
-    with open(URL_FILE, 'r', encoding='utf-8') as file:
-        urls = []
-        for line in file:
-            # Strip whitespace and skip empty lines
-            url = line.strip()
-            if not url:
-                continue
-            # Extract hostname from the URL
-            parsed_url = urlparse(url)
-            host = parsed_url.netloc
-            urls.append({"url": url, "host": host})
-        #random.shuffle(urls)
-        return urls
 
 
 def get_least_covered_random_hosts(db, size=100):
@@ -1686,6 +1668,48 @@ def get_instance_number():
     return 999
 
 
+def process_input_url_files(db):
+    if not os.path.isdir(INPUT_DIR):
+        return
+
+    files = [f for f in os.listdir(INPUT_DIR) if os.path.isfile(os.path.join(INPUT_DIR, f))]
+    if not files:
+        return
+
+    # Pick a random file
+    file_to_process = os.path.join(INPUT_DIR, random.choice(files))
+
+    print(f"Processing input file: {file_to_process}")
+    with open(file_to_process, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    urls_to_process = lines[:MAX_URLS_FROM_FILE]
+
+    # Crawl each of the URLs
+    driver = initialize_driver()
+    for url in urls_to_process:
+        url = url.strip()
+        if not url:
+            continue
+        try:
+            print('    [FILE] {}'.format(url))
+            del driver.requests
+            get_page(url, driver, db)
+            if HUNT_OPEN_DIRECTORIES:
+                insert_directory_tree(url, db)
+        except Exception as e:
+            print(f"Error crawling {url}: {e}")
+    driver.quit()
+
+    # Rewrite file without the processed lines
+    remaining = lines[MAX_URLS_FROM_FILE:]
+    with open(file_to_process, "w", encoding="utf-8") as f:
+        f.writelines(remaining)
+
+    if not remaining:
+        os.remove(file_to_process)
+
+
 def main():
     instance = get_instance_number()
     db = DatabaseConnection()
@@ -1702,10 +1726,13 @@ def main():
         if REMOVE_INVALID_URLS:
             print("Instance 1: Deleting invalid urls.")
             remove_invalid_urls(db)
+        print("Instance 1: Checking for input URL files...")
+        process_input_url_files(db)            
         print("Instance 1: Let's go full crawler mode.")
         crawler(db)
     elif instance == 2:
         print("Instance 2: Running fast extension pass only. Not everything needs selenium... running requests in urls that looks like files.")
+        process_input_url_files(db)            
         run_fast_extension_pass(db)
     elif instance == 3:
         print("Instance 3: Scanning IPs in some unconventional ports and protocols combinations.")

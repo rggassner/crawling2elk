@@ -409,8 +409,11 @@ def db_insert_if_new_url(
                     }}
                     """
                 )
-
-        script_lines.append("if (has_updated) { ctx._source.updated_at = params.updated_at; }")
+        script_lines.append(
+            "if (has_updated) { "
+            "ctx._source.updated_at = params.updated_at; "
+            "}"
+        )
         script = "\n".join(script_lines)
 
         # Merge doc fields safely
@@ -441,22 +444,22 @@ def db_insert_if_new_url(
                         "upsert": upsert_doc
                     }
                 )
-                return True  # ✅ Success on first or second attempt
+                return True  # Success on first or second attempt
             except ConflictError as ce:
                 if attempt == 0:
                     if debug:
-                        print(f"[RETRY] 🔁 Version conflict on first attempt for URL: {url}")
+                        print(f"[RETRY] Version conflict on first attempt for URL: {url}")
                     time.sleep(0.05)  # Slight pause before retry
                 else:
-                    print(f"[Elasticsearch] ❌ Final ConflictError on retry for URL '{url}': {ce}")
+                    print(f"[Elasticsearch] Final ConflictError on retry for URL '{url}': {ce}")
                     return False
             except Exception as e:
-                print(f"[Elasticsearch] ❌ Error inserting URL '{url}': {type(e).__name__} - {e}")
+                print(f"[Elasticsearch] Error inserting URL '{url}': {type(e).__name__} - {e}")
                 return False
 
 
     except Exception as e:
-        print(f"[Elasticsearch] ❌ Error inserting URL '{url}': {type(e).__name__} - {e}")
+        print(f"[Elasticsearch] Error inserting URL '{url}': {type(e).__name__} - {e}")
         return False
 
 
@@ -518,6 +521,7 @@ content_type_audio_regex=[
         r"^audio/mpeg$",
         r"^audio/opus$",
         r"^audio/x-m4a$",
+        r"^audio/x-m4p$",
         r"^audio/x-rpm$",
         r"^audio/x-wav$",
         r"^audio/x-aiff$",
@@ -588,6 +592,7 @@ content_type_image_regex = [
         r"^image/svg$",    
         r"^image/jpg$",
         r"^image/any$",
+        r"^image/heic$",
         r"^image/apng$",
         r"^image/avif$",    
         r"^image/jpeg$",
@@ -1100,6 +1105,7 @@ EXTENSION_MAP = {
         ".JPG"      : content_type_image_regex,
         ".jpeg"     : content_type_image_regex,
         ".png"      : content_type_image_regex,
+        ".HEIC"     : content_type_image_regex,
         ".PNG"      : content_type_image_regex,
         ".gif"      : content_type_image_regex,
         ".svg"      : content_type_image_regex,

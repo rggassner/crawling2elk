@@ -351,11 +351,17 @@ def get_directory_tree(url):
     return dtree
 
 
-def insert_directory_tree(content_url,db):
-    parent_host=urlsplit(content_url)[1]
+def insert_directory_tree(content_url, db):
+    parent_host = urlsplit(content_url)[1]
     for url in get_directory_tree(content_url):
         url = sanitize_url(url)
-        db_insert_if_new_url(url=url,words='',content_type='', visited=False,source="insert_directory_tree",parent_host=parent_host,db=db)
+        db_insert_if_new_url(
+                url=url, words='',
+                content_type='',
+                visited=False,
+                source="insert_directory_tree",
+                parent_host=parent_host,
+                db=db)
 
 
 @function_for_content_type(content_type_html_regex)
@@ -1353,66 +1359,6 @@ def get_random_host_domains(db, size=100):
         return []
 
 
-def db_create_database(initial_url, db):
-    print("Creating Elasticsearch index structure.")
-    now_iso = datetime.now(timezone.utc).isoformat()
-    # Define mappings for the URLS_INDEX
-    urls_mapping = {
-        "mappings": {
-            "properties": {
-                "url": {"type": "keyword"},
-                "visited": {"type": "boolean"},
-                "isopendir": {"type": "boolean"},
-                "isnsfw": {"type": "float"},
-                "content_type": {"type": "keyword"},
-                "source": {"type": "keyword"},
-                "words": {"type": "keyword"},
-                "host": {"type": "keyword"},
-                "parent_host": {"type": "keyword"},
-                "host_levels": {"type": "keyword"},
-                "directory_levels": {"type": "keyword"},
-                "host_levels": {"type": "keyword"},
-                "file_extension": {"type": "keyword"},
-                "has_query": {"type": "boolean"},
-                "query_variables": {"type": "keyword"},
-                "query_values": {"type": "keyword"},
-                **{
-                    f"directory_level_{i+1}": {"type": "keyword"}
-                    for i in range(MAX_DIR_LEVELS)
-                },
-                **{
-                    f"host_level_{i+1}": {"type": "keyword"}
-                    for i in range(MAX_HOST_LEVELS)
-                },
-                "emails": {"type": "keyword"},
-                "resolution": {"type": "integer"},
-                "random_bucket": {"type": "integer"},
-                "created_at": {"type": "date"},
-                "updated_at": {"type": "date"},
-                "opendir_category": {"type": "keyword"},
-                "min_webcontent": {"type": "text"},
-                "raw_webcontent": {"type": "text"}
-            }
-        }
-    }
-
-    try:
-        if not db.con.indices.exists(index=URLS_INDEX):
-            db.con.indices.create(index=URLS_INDEX, body=urls_mapping)
-            print("Created {} index.".format(URLS_INDEX))
-            db_insert_if_new_url(
-                    url=initial_url,
-                    source='db_create_database',
-                    parent_host=urlsplit(initial_url)[1],
-                    db=db
-                )
-            print("Inserted initial url {}.".format(initial_url))
-        return True
-    except Exception as e:
-        print("Error creating indices or inserting initial document:", e)
-        return False
-
-
 def fast_extension_crawler(url, extension, content_type_patterns, db):
     headers = {"User-Agent": UserAgent().random}
     try:
@@ -1422,15 +1368,22 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
                              source='fast_extension_crawler.head.exception', db=db)
         return
 
-    # if (400 <= head_resp.status_code < 500):
-    #    db_insert_if_new_url(url=url, visited=True, words='', min_webcontent='', raw_webcontent='', source='fast_extension_crawler.head.status_code_4xx', db=db)
-    # elif not (200 <= head_resp.status_code < 300):
     if not (200 <= head_resp.status_code < 300):
         return
-    
-    print('url {} {}'.format(head_resp.status_code, url))
+
+    print('-{}-'.format(url))
     content_type = head_resp.headers.get("Content-Type", "").lower().split(";")[0].strip()
+
+    content_type = head_resp.headers.get("Content-Type", "")
+    if not content_type:
+        print(f"[FAST CRAWLER] No content type found for {url}")
+        mark_url_as_fast_crawled(url, db)
+        return
+
+    content_type = content_type.lower().split(";")[0].strip()
     if not any(re.match(pattern, content_type) for pattern in content_type_patterns):
+        print(f"[FAST CRAWLER] Mismatch content type for {url}, got: {content_type}")
+        mark_url_as_fast_crawled(url, db)
         return
 
     try:
@@ -1505,10 +1458,12 @@ def run_fast_extension_pass(db, max_workers=MAX_FAST_WORKERS):
                         {"term": {"visited": False}},
                         {"wildcard": {"url": f"*{extension}"}},
                         {"term": {"random_bucket": random_bucket}}
+                    ],
+                    "must_not": [
+                        {"term": {"fast_crawled": True}}
                     ]
                 }
             }
-
             try:
                 result = db.es.search(index=URLS_INDEX, query=query, size=10000)
                 urls = result.get("hits", {}).get("hits", [])
@@ -1559,7 +1514,7 @@ def remove_invalid_urls(db):
         
         # Remove if URL changed after sanitization
         if pre_url != url:
-            print(f"🧹 Deleted sanitized URL: -{pre_url}- inserting -{url}-")
+            print(f"Deleted sanitized URL: -{pre_url}- inserting -{url}-")
             db_insert_if_new_url(url=url, visited=False, source="remove_invalid_urls", db=db)
             db.es.delete(index=URLS_INDEX, id=doc['_id'])
             deleted += 1
@@ -1567,11 +1522,11 @@ def remove_invalid_urls(db):
         
         # Remove if completely missing a scheme (e.g., "www.example.com")
         if not parsed.scheme:
-            print(f"🚫 Deleted URL with no scheme: -{url}-")
+            print(f"Deleted URL with no scheme: -{url}-")
             db.es.delete(index=URLS_INDEX, id=doc['_id'])
             deleted += 1
 
-    print(f"\n✅ Done. Total invalid URLs deleted: {deleted}")
+    print(f"\nDone. Total invalid URLs deleted: {deleted}")
 
 def remove_blocked_hosts_from_es_db(db):
     compiled_blocklist = [re.compile(pattern) for pattern in HOST_REGEX_BLOCK_LIST]
@@ -1587,13 +1542,13 @@ def remove_blocked_hosts_from_es_db(db):
             host = urlsplit(url).hostname or ''
             if is_blocked(host):
                 db.es.delete(index=URLS_INDEX, id=doc['_id'])
-                print(f"🧹 Deleted: {url}")
+                print(f"Deleted: {url}")
                 deleted += 1
     except NotFoundError as e:
         if "index_not_found_exception" in str(e):
             print("Elasticsearch index missing. Creating now...")
             db_create_database(INITIAL_URL, db=db)
-    print(f"\n✅ Done. Total deleted: {deleted}")
+    print(f"\nDone. Total deleted: {deleted}")
 
 def remove_blocked_urls_from_es_db(db):
    # Compile path-based regex block list
@@ -1610,13 +1565,13 @@ def remove_blocked_urls_from_es_db(db):
             path = urlsplit(url).path or ''
             if is_blocked_path(path):
                 db.es.delete(index=URLS_INDEX, id=doc['_id'])
-                print(f"🧹 Deleted by path: {url}")
+                print(f"Deleted by path: {url}")
                 deleted += 1
     except NotFoundError as e:
         if "index_not_found_exception" in str(e):
             print("Elasticsearch index missing. Creating now...")
             db_create_database(INITIAL_URL, db=db)
-    print(f"\n✅ Done. Total deleted by path: {deleted}")
+    print(f"\nDone. Total deleted by path: {deleted}")
 
 def make_https_app():
     return web.Application([
@@ -1667,47 +1622,52 @@ def get_instance_number():
         print(f"Error determining instance number: {e}")
     return 999
 
-
 def process_input_url_files(db):
     if not os.path.isdir(INPUT_DIR):
         return
 
-    files = [f for f in os.listdir(INPUT_DIR) if os.path.isfile(os.path.join(INPUT_DIR, f))]
-    if not files:
-        return
+    while True:
+        files = [f for f in os.listdir(INPUT_DIR) if os.path.isfile(os.path.join(INPUT_DIR, f))]
+        if not files:
+            print("No more input files to process.")
+            break
 
-    # Pick a random file
-    file_to_process = os.path.join(INPUT_DIR, random.choice(files))
+        file_to_process = os.path.join(INPUT_DIR, random.choice(files))
+        print(f"Processing input file: {file_to_process}")
 
-    print(f"Processing input file: {file_to_process}")
-    with open(file_to_process, "r", encoding="utf-8") as f:
-        lines = f.readlines()
+        with open(file_to_process, "r", encoding="utf-8") as f:
+            lines = f.readlines()
 
-    urls_to_process = lines[:MAX_URLS_FROM_FILE]
-
-    # Crawl each of the URLs
-    driver = initialize_driver()
-    for url in urls_to_process:
-        url = url.strip()
-        if not url:
+        if not lines:
+            print(f"File is empty, deleting: {file_to_process}")
+            os.remove(file_to_process)
             continue
-        try:
-            print('    [FILE] {}'.format(url))
-            del driver.requests
-            get_page(url, driver, db)
-            if HUNT_OPEN_DIRECTORIES:
-                insert_directory_tree(url, db)
-        except Exception as e:
-            print(f"Error crawling {url}: {e}")
-    driver.quit()
 
-    # Rewrite file without the processed lines
-    remaining = lines[MAX_URLS_FROM_FILE:]
-    with open(file_to_process, "w", encoding="utf-8") as f:
-        f.writelines(remaining)
+        urls_to_process = lines[:MAX_URLS_FROM_FILE]
+        remaining = lines[MAX_URLS_FROM_FILE:]
 
-    if not remaining:
-        os.remove(file_to_process)
+        driver = initialize_driver()
+        for url in urls_to_process:
+            url = url.strip()
+            if not url:
+                continue
+            try:
+                print('    [FILE] {}'.format(url))
+                del driver.requests
+                get_page(url, driver, db)
+                if HUNT_OPEN_DIRECTORIES:
+                    insert_directory_tree(url, db)
+            except Exception as e:
+                print(f"Error crawling {url}: {e}")
+        driver.quit()
+
+        # Rewrite file with remaining lines
+        if remaining:
+            with open(file_to_process, "w", encoding="utf-8") as f:
+                f.writelines(remaining)
+        else:
+            os.remove(file_to_process)
+            print(f"File fully processed and removed: {file_to_process}")
 
 
 def main():
@@ -1732,7 +1692,6 @@ def main():
         crawler(db)
     elif instance == 2:
         print("Instance 2: Running fast extension pass only. Not everything needs selenium... running requests in urls that looks like files.")
-        process_input_url_files(db)            
         run_fast_extension_pass(db)
     elif instance == 3:
         print("Instance 3: Scanning IPs in some unconventional ports and protocols combinations.")

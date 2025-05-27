@@ -225,6 +225,67 @@ def remove_jsessionid_with_semicolon(url):
     return cleaned_url
 
 
+def db_create_database(initial_url, db):
+    print("Creating Elasticsearch index structure.")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    # Define mappings for the URLS_INDEX
+    urls_mapping = {
+        "mappings": {
+            "properties": {
+                "url": {"type": "keyword"},
+                "visited": {"type": "boolean"},
+                "fast_crawled": {"type": "boolean"},
+                "isopendir": {"type": "boolean"},
+                "isnsfw": {"type": "float"},
+                "content_type": {"type": "keyword"},
+                "source": {"type": "keyword"},
+                "words": {"type": "keyword"},
+                "host": {"type": "keyword"},
+                "parent_host": {"type": "keyword"},
+                "host_levels": {"type": "keyword"},
+                "directory_levels": {"type": "keyword"},
+                "host_levels": {"type": "keyword"},
+                "file_extension": {"type": "keyword"},
+                "has_query": {"type": "boolean"},
+                "query_variables": {"type": "keyword"},
+                "query_values": {"type": "keyword"},
+                **{
+                    f"directory_level_{i+1}": {"type": "keyword"}
+                    for i in range(MAX_DIR_LEVELS)
+                },
+                **{
+                    f"host_level_{i+1}": {"type": "keyword"}
+                    for i in range(MAX_HOST_LEVELS)
+                },
+                "emails": {"type": "keyword"},
+                "resolution": {"type": "integer"},
+                "random_bucket": {"type": "integer"},
+                "created_at": {"type": "date"},
+                "updated_at": {"type": "date"},
+                "opendir_category": {"type": "keyword"},
+                "min_webcontent": {"type": "text"},
+                "raw_webcontent": {"type": "text"}
+            }
+        }
+    }
+
+    try:
+        if not db.con.indices.exists(index=URLS_INDEX):
+            db.con.indices.create(index=URLS_INDEX, body=urls_mapping)
+            print("Created {} index.".format(URLS_INDEX))
+            db_insert_if_new_url(
+                    url=initial_url,
+                    source='db_create_database',
+                    parent_host=urlsplit(initial_url)[1],
+                    db=db
+                )
+            print("Inserted initial url {}.".format(initial_url))
+        return True
+    except Exception as e:
+        print("Error creating indices or inserting initial document:", e)
+        return False
+
+
 def db_insert_if_new_url(
         url='',
         isopendir=None,
@@ -239,7 +300,8 @@ def db_insert_if_new_url(
         parent_host='',
         email=None,
         db=None,
-        debug=False):
+        debug=False,
+        fast_crawled=None):
 
     host = urlsplit(url)[1]
     url = remove_jsessionid_with_semicolon(url)
@@ -330,6 +392,8 @@ def db_insert_if_new_url(
         doc = {}
         if content_type:
             doc["content_type"] = content_type
+        if fast_crawled is not None:
+            doc["fast_crawled"] = bool(fast_crawled)
         if words:
             doc["words"] = words
         if min_webcontent:
@@ -462,6 +526,15 @@ def db_insert_if_new_url(
         print(f"[Elasticsearch] Error inserting URL '{url}': {type(e).__name__} - {e}")
         return False
 
+def mark_url_as_fast_crawled(url, db):
+    db_insert_if_new_url(
+        url=url,
+        source='fast_extension_crawler.no_match',
+        fast_crawled=True,
+        db=db,
+        debug=False
+    )
+
 
 def get_host_levels(hostname):
     """Returns all host levels from right (TLD) to left (subdomain), ignoring any port number."""
@@ -559,8 +632,8 @@ content_type_compressed_regex =[
         r"^application/x-tar-gz$",
         r"^application/x-compress$",
         r"^application/octetstream$",
-        r"^application/x-octet-stream$",
         r"^application/octet-stream$",
+        r"^application/x-octet-stream$",
         r"^application/x-7z-compressed$",
         r"^application/x-rar-compressed$",
         r"^application/x-zip-compressed$",
@@ -586,6 +659,7 @@ content_type_image_regex = [
         r"^image$",        
         r"^img/jpeg$",    
         r"^image/\*$",
+        r"^image/jp2$",    
         r"^image/gif$",
         r"^image/png$",
         r"^image/bmp$",
@@ -636,6 +710,9 @@ content_type_doc_regex = [
 
 content_type_torrent_regex = [
         r"^application/x-bittorrent$",
+        r"^application/octetstream$",
+        r"^application/octet-stream$",
+        r"^application/x-octet-stream$",
         ]
 
 content_type_font_regex = [
@@ -913,6 +990,7 @@ content_type_all_others_regex = [
         r"^application/x-twb$",
         r"^application/x-msi$",
         r"^application/x-xar$",
+        r"^model/gltf-binary$",
         r"^application/x-shar$",
         r"^application/x-ruby$",
         r"^application/x-frpc$",
@@ -922,11 +1000,14 @@ content_type_all_others_regex = [
         r"^application/msword$",
         r"^application/turtle$",
         r"^application/x-doom$",
+        r"^binary/octet-stream$",
+        r"^multipart/form-data$",
         r"^application/x-trash$",
         r"^application/msexcel$",
         r"^application/unknown$",
         r"^application/xml-dtd$",
         r"^application/x-ndjson$",
+        r"^application/x-nozomi$",
         r"^application/x-adrift$",
         r"^application/x-binary$",
         r"^application/rdf\+xml$",
@@ -1007,15 +1088,13 @@ content_type_all_others_regex = [
         r"^application/x-java-jnlp-file$",
         r"^application/x-httpd-ea-php71$",
         r"^Content-Type:application/json$",
-        r"^model/gltf-binary$",
-        r"^binary/octet-stream$",
-        r"^multipart/form-data$",
         r"^httpd/unix-directory$",
         r"^javascript charset=UTF-8$",
         r"^applications/javascript$",
         r"^javascriptcharset=UTF-8$",
         r"^application/vnd\.ogc\.wms_xml$",
         r"^application/x-apple-diskimage$",
+        r"^application/vnd\.bestbuy\+json$",
         r"^application/x-chrome-extension$",
         r"^application/x-mobipocket-ebook$",
         r"^application/vnd\.1cbn\.v1+json$",
@@ -1104,6 +1183,7 @@ EXTENSION_MAP = {
         ".tiff"     : content_type_image_regex,
         ".JPG"      : content_type_image_regex,
         ".jpeg"     : content_type_image_regex,
+        ".jp2"      : content_type_image_regex,
         ".png"      : content_type_image_regex,
         ".HEIC"     : content_type_image_regex,
         ".PNG"      : content_type_image_regex,

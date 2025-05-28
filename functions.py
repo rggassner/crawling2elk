@@ -512,19 +512,28 @@ def db_insert_if_new_url(
             except ConflictError as ce:
                 if attempt == 0:
                     if debug:
-                        print(f"[RETRY] Version conflict on first attempt for URL: {url}")
+                        print(
+                            "[RETRY] Version conflict on first attempt "
+                            f"for URL: {url}"
+                        )
                     time.sleep(0.05)  # Slight pause before retry
                 else:
-                    print(f"[Elasticsearch] Final ConflictError on retry for URL '{url}': {ce}")
+                    print(
+                        "[Elasticsearch] Final ConflictError on retry for "
+                        f"URL '{url}': {ce}"
+                    )
                     return False
             except Exception as e:
-                print(f"[Elasticsearch] Error inserting URL '{url}': {type(e).__name__} - {e}")
+                print(
+                    "[Elasticsearch] Error inserting URL "
+                    f"'{url}': {type(e).__name__} - {e}"
+                )
                 return False
-
 
     except Exception as e:
         print(f"[Elasticsearch] Error inserting URL '{url}': {type(e).__name__} - {e}")
         return False
+
 
 def mark_url_as_fast_crawled(url, db):
     db_insert_if_new_url(
@@ -1020,6 +1029,7 @@ content_type_all_others_regex = [
         r"^application/x-subrip$",
         r"^application/x-bibtex$",
         r"^application/pkix-crl$",
+        r"^httpd/unix-directory$",
         r"^application/n-triples$",
         r"^application/vnd\.smaf$",
         r"^application/geo\+json$",
@@ -1041,6 +1051,7 @@ content_type_all_others_regex = [
         r"^application/pkcs7-mime$",
         r"^application/javascript$",
         r"^application/oct-stream$",
+        r"^chemical/x-galactic-spc$",
         r"^application/vnd\.yt-ump$",
         r"^application/octetstream$",
         r"^application/x-xpinstall$",
@@ -1088,7 +1099,6 @@ content_type_all_others_regex = [
         r"^application/x-java-jnlp-file$",
         r"^application/x-httpd-ea-php71$",
         r"^Content-Type:application/json$",
-        r"^httpd/unix-directory$",
         r"^javascript charset=UTF-8$",
         r"^applications/javascript$",
         r"^javascriptcharset=UTF-8$",
@@ -1221,4 +1231,3 @@ EXTENSION_MAP = {
         ".woff"     : content_type_font_regex,
         ".TTF"      : content_type_font_regex,
     }
-

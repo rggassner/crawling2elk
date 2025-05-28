@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-CONFIG="$DIR/config.py"
+CONFIG="$DIR/../config.py"
 
 # Extract config values from config.py
 HOST=$(grep 'ELASTICSEARCH_HOST' "$CONFIG" | cut -d'"' -f2)

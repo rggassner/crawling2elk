@@ -374,14 +374,34 @@ def content_type_download(args):
         soup = BeautifulSoup(content, "html.parser")
     except UnboundLocalError as e:
         print(e)
-        db_insert_if_new_url(url=args['url'],content_type=args['content_type'],isopendir=False,visited=True,words='',min_webcontent='',raw_webcontent='',source='content_type_html_regex.exception',parent_host=args['parent_host'],db=args['db'])
+        db_insert_if_new_url(
+                url=args['url'],
+                content_type=args['content_type'],
+                isopendir=False,
+                visited=True,
+                words='',
+                min_webcontent='',
+                raw_webcontent='',
+                source='content_type_html_regex.exception',
+                parent_host=args['parent_host'],
+                db=args['db'])
         return False
     except bs4.builder.ParserRejectedMarkup as e:
-        db_insert_if_new_url(url=args['url'],content_type=args['content_type'],isopendir=False,visited=True,words='',min_webcontent='',raw_webcontent='',source='content_type_html_regex.exception',parent_host=args['parent_host'],db=args['db'])
+        db_insert_if_new_url(
+                url=args['url'],
+                content_type=args['content_type'],
+                isopendir=False,
+                visited=True,
+                words='',
+                min_webcontent='',
+                raw_webcontent='',
+                source='content_type_html_regex.exception',
+                parent_host=args['parent_host'],
+                db=args['db'])
         print(e)
         return False
 
-    get_links(soup, args['url'],args['db'])
+    get_links(soup, args['url'], args['db'])
     words = ''
     min_webcontent=''
     raw_webcontent=''

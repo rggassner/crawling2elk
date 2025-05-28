@@ -137,9 +137,6 @@ EXTRACT_MIN_WEBCONTENT = True
 # Should be under 1 million for a default elastic search env
 MAX_WEBCONTENT_SIZE = 900000
 
-# URL File should be one url per line
-URL_FILE = 'sampled_urls.txt'
-
 # search words will be randomly chosen, web searched and crawled
 SEARCH_WORDS = [
     "Oni", "Tengu", "Kappa", "Kitsune", "Tanuki", "Yuki-onna", "Rokurokubi",

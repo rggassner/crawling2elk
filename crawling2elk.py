@@ -403,19 +403,29 @@ def content_type_download(args):
 
     get_links(soup, args['url'], args['db'])
     words = ''
-    min_webcontent=''
-    raw_webcontent=''
+    min_webcontent = ''
+    raw_webcontent = ''
     if EXTRACT_WORDS:
         words = get_words_from_soup(soup)
 
     if EXTRACT_RAW_WEBCONTENT:
-        raw_webcontent=str(soup)[:MAX_WEBCONTENT_SIZE]
+        raw_webcontent = str(soup)[:MAX_WEBCONTENT_SIZE]
 
     if EXTRACT_MIN_WEBCONTENT:
-        min_webcontent=get_min_webcontent(soup)[:MAX_WEBCONTENT_SIZE]
+        min_webcontent = get_min_webcontent(soup)[:MAX_WEBCONTENT_SIZE]
 
     isopendir = is_open_directory(str(soup), args['url'])
-    db_insert_if_new_url(url=args['url'],content_type=args['content_type'],isopendir=isopendir,visited=True,words=words,min_webcontent=min_webcontent,raw_webcontent=raw_webcontent,source='content_type_html_regex',parent_host=args['parent_host'],db=args['db'])
+    db_insert_if_new_url(
+            url=args['url'],
+            content_type=args['content_type'],
+            isopendir=isopendir,
+            visited=True,
+            words=words,
+            min_webcontent=min_webcontent,
+            raw_webcontent=raw_webcontent,
+            source='content_type_html_regex',
+            parent_host=args['parent_host'],
+            db=args['db'])
     return True
 
 
@@ -424,7 +434,15 @@ def content_type_plain_text(args):
     words = ''
     if EXTRACT_WORDS:
         words = get_words(args['content'])
-    db_insert_if_new_url(url=args['url'],content_type=args['content_type'],isopendir=False,visited=True,words=words,source='content_type_plain_text_regex',parent_host=args['parent_host'],db=args['db'])
+    db_insert_if_new_url(
+            url=args['url'],
+            content_type=args['content_type'],
+            isopendir=False,
+            visited=True,
+            words=words,
+            source='content_type_plain_text_regex',
+            parent_host=args['parent_host'],
+            db=args['db'])
     return True
 
 

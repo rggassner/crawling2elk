@@ -531,7 +531,10 @@ def db_insert_if_new_url(
                 return False
 
     except Exception as e:
-        print(f"[Elasticsearch] Error inserting URL '{url}': {type(e).__name__} - {e}")
+        print(
+            "[Elasticsearch] Error inserting URL "
+            f"'{url}': {type(e).__name__} - {e}"
+        )
         return False
 
 
@@ -546,21 +549,32 @@ def mark_url_as_fast_crawled(url, db):
 
 
 def get_host_levels(hostname):
-    """Returns all host levels from right (TLD) to left (subdomain), ignoring any port number."""
+    """
+    Returns all host levels from right (TLD) to left (subdomain),
+    ignoring any port number.
+    """
+
     hostname = hostname.split(':')[0]  # Remove port if present
     parts = hostname.split('.')
     parts_reversed = list(parts)
     return {
         "host_levels": parts_reversed,
-        "host_level_map": {f"host_level_{i+1}": level for i, level in enumerate(parts_reversed)}
+        "host_level_map": {
+            f"host_level_{i+1}": level
+            for i, level in enumerate(parts_reversed)
+        }
     }
 
 
 def get_directory_levels(url_path):
-    """Extracts all directory levels from a URL path and ensures correct numbering."""
+    """
+    Extracts all directory levels from a URL path
+    and ensures correct numbering.
+    """
+
     # Split the URL path into parts and remove empty strings
     levels = [p for p in url_path.strip("/").split("/") if p]
-    
+
     # Ensure the levels list is padded to MAX_DIR_LEVELS
     if len(levels) < MAX_DIR_LEVELS:
         levels = levels + [''] * (MAX_DIR_LEVELS - len(levels))  # Add empty levels at the end
@@ -730,6 +744,7 @@ content_type_font_regex = [
         r"^font/ttf$",
         r"^font/otf$",
         r"^font/sfnt$",
+        r"^image/otf$",
         r"^font/woff$",
         r"^x-font/ttf$",
         r"^font/woff2$",
@@ -960,9 +975,9 @@ content_type_all_others_regex = [
         r"^model/usd$",
         r"^model/stl$",
         r"^model/obj$",
-        r"^image/otf$",
         r"^model/step$",
         r"^(null)/ico$",
+        r"^test/plain$",
         r"^Content-Type$",
         r"^octet/stream$",
         r"^cms/redirect$",
@@ -984,6 +999,7 @@ content_type_all_others_regex = [
         r"^application/mbox$",
         r"^application/epub$",
         r"^application/node$",
+        r"^application/smil$",
         r"^application/wasm$",
         r"^application/mobi$",
         r"^application/save$",
@@ -1051,6 +1067,8 @@ content_type_all_others_regex = [
         r"^application/pkcs7-mime$",
         r"^application/javascript$",
         r"^application/oct-stream$",
+        r"^applications/javascript$",
+        r"^javascriptcharset=UTF-8$",
         r"^chemical/x-galactic-spc$",
         r"^application/vnd\.yt-ump$",
         r"^application/octetstream$",
@@ -1100,8 +1118,6 @@ content_type_all_others_regex = [
         r"^application/x-httpd-ea-php71$",
         r"^Content-Type:application/json$",
         r"^javascript charset=UTF-8$",
-        r"^applications/javascript$",
-        r"^javascriptcharset=UTF-8$",
         r"^application/vnd\.ogc\.wms_xml$",
         r"^application/x-apple-diskimage$",
         r"^application/vnd\.bestbuy\+json$",

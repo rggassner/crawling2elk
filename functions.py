@@ -24,7 +24,7 @@ class DatabaseConnection:
             es_config["ca_certs"] = ELASTICSEARCH_CA_CERT_PATH
 
         self.es = Elasticsearch(**es_config)
-        self.con = self.es  # ✅ Optional alias for compatibility
+        self.con = self.es  # Optional alias for compatibility
 
     def commit(self):
         pass
@@ -578,17 +578,17 @@ def get_directory_levels(url_path):
     # Ensure the levels list is padded to MAX_DIR_LEVELS
     if len(levels) < MAX_DIR_LEVELS:
         levels = levels + [''] * (MAX_DIR_LEVELS - len(levels))  # Add empty levels at the end
-    
+
     # Map the levels to their directory level numbers
     directory_level_map = {f"directory_level_{i+1}": levels[i] for i in range(len(levels))}
-    
+
     return {
         "directory_levels": levels,
         "directory_level_map": directory_level_map
     }
 
 
-content_type_html_regex=[
+content_type_html_regex = [
         r"^text/html$",
         r"^text/html,text/html",
         r"^text/fragment\+html$",
@@ -599,12 +599,12 @@ content_type_html_regex=[
         r"^text/vnd\.reddit\.partial\+html$",
     ]
 
-content_type_midi_regex=[
+content_type_midi_regex = [
         r"^audio/midi$",
         r"^audio/sp-midi$",
     ]
 
-content_type_audio_regex=[
+content_type_audio_regex = [
         r"^audio/ogg$",
         r"^audio/mp3$",
         r"^audio/mp4$",
@@ -638,7 +638,7 @@ content_type_audio_regex=[
         r"^application/vnd\.rn-realmedia$",
     ]
 
-content_type_compressed_regex =[
+content_type_compressed_regex = [
         r"^multipart/x-zip$",
         r"^application/zip$",
         r"^application/rar$",
@@ -724,6 +724,7 @@ content_type_doc_regex = [
         r"^application/xls$",
         r"^application/vnd\.ms-word\.document\.12$",
         r"^application/vnd\.oasis\.opendocument\.text$",
+        r"^application/vnd\.ms-powerpoint\.slideshow\.macroEnabled\.12$",
         r"^application/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet$",
         r"^application/vnd\.openxmlformats-officedocument\.presentationml\.slideshow",
         r"^application/vnd\.openxmlformats-officedocument\.wordprocessingml\.document$",
@@ -775,6 +776,7 @@ content_type_font_regex = [
         r"^application/x-font-truetype$",
         r"^application/x-font-opentype$",
         r"^value=application/x-font-woff2$",
+        r"^application/font-woff2,font/woff2$",
         r"^font/woff2\|application/octet-stream\|font/x-woff2$",
         ]
 
@@ -879,7 +881,7 @@ content_type_plain_text_regex = [
         r"^application/json,application/json$",
     ]
 
-url_all_others_regex =[
+url_all_others_regex = [
         r"^#",
         r"^$",
         r"^\$",
@@ -978,6 +980,7 @@ content_type_all_others_regex = [
         r"^model/step$",
         r"^(null)/ico$",
         r"^test/plain$",
+        r"^text/octet$",
         r"^Content-Type$",
         r"^octet/stream$",
         r"^cms/redirect$",
@@ -1031,6 +1034,7 @@ content_type_all_others_regex = [
         r"^application/msexcel$",
         r"^application/unknown$",
         r"^application/xml-dtd$",
+        r"^chemical/x-molconn-Z$",
         r"^application/x-ndjson$",
         r"^application/x-nozomi$",
         r"^application/x-adrift$",
@@ -1085,6 +1089,7 @@ content_type_all_others_regex = [
         r"^application/x-executable$",
         r"^application/marcxml\+xml$",
         r"^application/v3\.25\+json$",
+        r"^javascript charset=UTF-8$",
         r"^multipart/x-mixed-replace$",
         r"^application/pgp-encrypted$",
         r"^application/x-base64-frpc$",
@@ -1117,7 +1122,6 @@ content_type_all_others_regex = [
         r"^application/x-java-jnlp-file$",
         r"^application/x-httpd-ea-php71$",
         r"^Content-Type:application/json$",
-        r"^javascript charset=UTF-8$",
         r"^application/vnd\.ogc\.wms_xml$",
         r"^application/x-apple-diskimage$",
         r"^application/vnd\.bestbuy\+json$",
@@ -1143,11 +1147,14 @@ content_type_all_others_regex = [
         r"^application/speculationrules\+json$",
         r"^application/vnd\.vimeo\.user\+json$",
         r"^application/octet-stream,text/html$",
+        r"^application/json-amazonui-streaming$",
         r"^application/vnd\.vimeo\.video\+json$",
         r"^application/x-research-info-systems$",
         r"^application/vnd\.mapbox-vector-tile$",
         r"^application/amazonui-streaming-json$",
         r"^application/vnd\.vimeo\.error\+json$",
+        r"^application/json\+containerv1-server$",
+        r"^application/vnd.groove-tool-template$",
         r"^application/vnd\.vimeo\.credit\+json$",
         r"^application/vnd\.cas\.services\+yaml$",
         r"^application/vnd.inveniordm\.v1\+json$",
@@ -1247,3 +1254,4 @@ EXTENSION_MAP = {
         ".woff"     : content_type_font_regex,
         ".TTF"      : content_type_font_regex,
     }
+

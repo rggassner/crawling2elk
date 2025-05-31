@@ -23,7 +23,21 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def load_nmap_services(file_path):
-    """Load and parse nmap-services file to get port probabilities."""
+    """
+    Load and parse an nmap-services file to extract TCP port usage probabilities.
+
+    The function reads the specified nmap-services file line by line, skips comments
+    and empty lines, and extracts the port number and its associated probability
+    (only for TCP ports). The result is returned as a dictionary mapping port numbers
+    to their usage probabilities.
+
+    Args:
+        file_path (str): Path to the nmap-services file.
+
+    Returns:
+        dict[int, float]: A dictionary where keys are TCP port numbers (as integers)
+        and values are their corresponding probabilities (as floats).
+    """
     ports = {}
     with open(file_path, "r") as file:
         for line in file:

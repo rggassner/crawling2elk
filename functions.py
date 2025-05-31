@@ -13,29 +13,52 @@ from elasticsearch.exceptions import NotFoundError, RequestError
 from urllib.parse import urlsplit, urlunsplit, unquote, parse_qs
 
 
+# Class for managing a connection to an Elasticsearch cluster
 class DatabaseConnection:
+    """
+    A wrapper class for managing an Elasticsearch connection using the official Elasticsearch client.
+
+    This class mimics a standard database interface, providing compatibility with systems
+    that expect methods like `commit`, `close`, `search`, and `scroll`.
+
+    Attributes:
+        es (Elasticsearch): The initialized Elasticsearch client.
+        con (Elasticsearch): Alias for `es`, for compatibility with database-like interfaces.
+    """
     def __init__(self):
+        # Prepare configuration for Elasticsearch connection
         es_config = {
-            "hosts": [f"https://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}"],
-            "basic_auth": (ELASTICSEARCH_USER, ELASTICSEARCH_PASSWORD),
-            "verify_certs": False,
+            "hosts": [f"https://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}"],  # Host and port of Elasticsearch cluster
+            "basic_auth": (ELASTICSEARCH_USER, ELASTICSEARCH_PASSWORD),       # Basic authentication credentials
+            "verify_certs": False,  # Disable SSL certificate verification (not recommended for production)
         }
+
+        # If a custom CA certificate path is provided, add it to the config for certificate verification
         if ELASTICSEARCH_CA_CERT_PATH:
             es_config["ca_certs"] = ELASTICSEARCH_CA_CERT_PATH
 
+        # Initialize Elasticsearch client with the config
         self.es = Elasticsearch(**es_config)
-        self.con = self.es  # Optional alias for compatibility
+
+        # Optional alias to keep compatibility with interfaces expecting `self.con`
+        self.con = self.es
 
     def commit(self):
+        # Placeholder method – does nothing
+        # Included for interface compatibility with other DB connectors (e.g., SQL)
         pass
 
     def close(self):
+        # Properly close the Elasticsearch connection
         self.es.close()
 
     def search(self, *args, **kwargs):
+        # Wrapper around the `search` method of the Elasticsearch client
+        # Allows flexible usage with both positional and keyword arguments
         return self.es.search(*args, **kwargs)
 
     def scroll(self, *args, **kwargs):
+        # Wrapper for the `scroll` API, used for paginating large result sets
         return self.es.scroll(*args, **kwargs)
 
 
@@ -678,43 +701,43 @@ content_type_image_regex = [
         r"^jpeg$",
         r"^webpx$",
         r"^.jpeg$",
-        r"^image/$",        
-        r"^image$",        
-        r"^img/jpeg$",    
+        r"^image/$",
+        r"^image$",
+        r"^img/jpeg$",
         r"^image/\*$",
-        r"^image/jp2$",    
+        r"^image/jp2$",
         r"^image/gif$",
         r"^image/png$",
         r"^image/bmp$",
-        r"^image/svg$",    
+        r"^image/svg$",
         r"^image/jpg$",
         r"^image/any$",
         r"^image/heic$",
         r"^image/apng$",
-        r"^image/avif$",    
+        r"^image/avif$",
         r"^image/jpeg$",
         r"^image/tiff$",
         r"^image/webp$",
         r"^image/pjpeg$",
         r"^image/x-png$",
         r"^image/x-eps$",
-        r"^image/dicomp$", 
+        r"^image/dicomp$",
         r"^image/x-icon$",
-        r"^image/\{png\}$", 
+        r"^image/\{png\}$",
         r"^data:image/png$",
-        r"^image/vnd\.dwg$",    
+        r"^image/vnd\.dwg$",
         r"^image/svg\+xml$",
-        r"^image/x-ms-bmp$",        
+        r"^image/x-ms-bmp$",
         r"^image/vnd\.djvu$",
-        r"^image/x-xbitmap$",        
-        r"^image/x-photoshop$",         
-        r"^image/x-coreldraw$",        
+        r"^image/x-xbitmap$",
+        r"^image/x-photoshop$",
+        r"^image/x-coreldraw$",
         r"^image/x-cmu-raster$",
         r"^image/vnd\.wap\.wbmp$",
-        r"^image/x\.fb\.keyframes$",        
+        r"^image/x\.fb\.keyframes$",
         r"^image/vnd\.microsoft\.icon$",
         r"^image/vnd\.adobe\.photoshop$",
-        r"^application/jpg$",        
+        r"^application/jpg$",
     ]
 
 content_type_doc_regex = [
@@ -769,7 +792,7 @@ content_type_font_regex = [
         r"^application/font-woff$",
         r"^application/x-font-ttf$",
         r"^application/x-font-otf$",
-        r"^application/font/woff2$",        
+        r"^application/font/woff2$",
         r"^application/font-woff2$",
         r"^application/x-font-woff$",
         r"^application/x-font-woff2$",
@@ -842,12 +865,12 @@ content_type_plain_text_regex = [
         r"^text/turtle$",
         r"^text/webloc$",
         r"^text/x-vcard$",
-        r"^text/ecmascript$",    
         r"^text/calendar$",
         r"^text/x-ndjson$",
         r"^text/x-bibtex$",
         r"^text/uri-list$",
         r"^text/markdown$",
+        r"^text/ecmascript$",
         r"^text/directory$",
         r"^text/x-amzn-ion$",
         r"^text/javsacript$",
@@ -982,6 +1005,7 @@ content_type_all_others_regex = [
         r"^(null)/ico$",
         r"^test/plain$",
         r"^text/octet$",
+        r"^text/x-scss$",
         r"^Content-Type$",
         r"^octet/stream$",
         r"^cms/redirect$",
@@ -1081,6 +1105,7 @@ content_type_all_others_regex = [
         r"^application/x-httpd-php$",
         r"^application/x-directory$",
         r"^application/x-troff-man$",
+        r"^application/schema\+json$",
         r"^application/encrypted-v2$",
         r"^application/java-archive$",
         r"^application/x-javascript$",
@@ -1091,6 +1116,7 @@ content_type_all_others_regex = [
         r"^application/marcxml\+xml$",
         r"^application/v3\.25\+json$",
         r"^javascript charset=UTF-8$",
+        r"^application/jwk-set\+json$",
         r"^multipart/x-mixed-replace$",
         r"^application/pgp-encrypted$",
         r"^application/x-base64-frpc$",

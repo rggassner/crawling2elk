@@ -34,9 +34,24 @@ from tornado import httpserver, ioloop, web
 from urllib.parse import unquote, urljoin, urlparse, urlsplit
 from urllib3.exceptions import InsecureRequestWarning
 
-if CATEGORIZE_NSFW:
-    import opennsfw2 as n2
-    model = n2.make_open_nsfw_model()
+
+def load_nsfw_model():
+    """
+    Conditionally loads the OpenNSFW2 model for image classification.
+
+    This function checks whether NSFW content categorization is enabled via the
+    `CATEGORIZE_NSFW` flag. If enabled, it imports the `opennsfw2` module and
+    initializes the pre-trained NSFW classification model using `make_open_nsfw_model()`.
+
+    Returns:
+        model (keras.Model or None): The loaded NSFW classification model if enabled,
+        otherwise None.
+    """
+    if CATEGORIZE_NSFW:
+        import opennsfw2 as n2
+        return n2.make_open_nsfw_model()
+    return None
+
 
 absl.logging.set_verbosity('error')
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
@@ -449,13 +464,13 @@ def content_type_plain_text(args):
 @function_for_content_type(content_type_image_regex)
 def content_type_images(args):
     global model
-    npixels=0
+    npixels = 0
     if CATEGORIZE_NSFW or DOWNLOAD_ALL_IMAGES:
         try:
             img = Image.open(BytesIO(args['content']))
             width, height = img.size
             npixels = width * height
-            nsfw_probability=0
+            nsfw_probability = 0
             if img.mode == "CMYK":
                 img = img.convert("RGB")
             # Check if it's a palette-based image with transparency
@@ -464,8 +479,16 @@ def content_type_images(args):
                 img = img.convert("RGBA")
             filename = hashlib.sha512(img.tobytes()).hexdigest() + ".png"
         except UnidentifiedImageError as e:
-            #SVG using cairo in the future
-            db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_images',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+            # SVG using cairo in the future
+            db_insert_if_new_url(
+                    url=args['url'],
+                    content_type=args['content_type'],
+                    source='content_type_images',
+                    isopendir=False,
+                    visited=True,
+                    parent_host=args['parent_host'],
+                    resolution=npixels,
+                    db=args['db'])
             return False
         except Image.DecompressionBombError as e:
             db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_images',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])

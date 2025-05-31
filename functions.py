@@ -842,6 +842,7 @@ content_type_plain_text_regex = [
         r"^text/turtle$",
         r"^text/webloc$",
         r"^text/x-vcard$",
+        r"^text/ecmascript$",    
         r"^text/calendar$",
         r"^text/x-ndjson$",
         r"^text/x-bibtex$",

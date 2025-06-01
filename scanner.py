@@ -53,6 +53,15 @@ def load_nmap_services(file_path):
 
 
 def get_http_or_https():
+    """
+    Randomly select either 'http' or 'https' based on predefined probabilities.
+
+    Uses weighted random choice to favor 'http' over 'https'. Specifically,
+    the function chooses 'http' 65% of the time and 'https' 35% of the time.
+
+    Returns:
+        str: Either 'http' or 'https', chosen randomly based on weight.
+    """
     return random.choices(["http", "https"], weights=[65, 35], k=1)[0]
 
 

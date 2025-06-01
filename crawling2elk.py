@@ -80,8 +80,20 @@ soup_tag_blocklist = [
 ]
 
 
-# Verify if host is in a blocklist.
 def is_host_block_listed(url):
+    """
+    Check if a given URL matches any pattern in the host blocklist.
+
+    This function iterates through a predefined list of regular expressions
+    (`HOST_REGEX_BLOCK_LIST`) and checks if the given URL matches any of them.
+    The match is case-insensitive and Unicode-aware.
+
+    Args:
+        url (str): The URL to check against the blocklist.
+
+    Returns:
+        bool: True if the URL matches any blocklist pattern, False otherwise.
+    """    
     for regex in HOST_REGEX_BLOCK_LIST:
         if re.search(regex, url, flags=re.I | re.U):
             return True
@@ -491,19 +503,44 @@ def content_type_images(args):
                     db=args['db'])
             return False
         except Image.DecompressionBombError as e:
-            db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_images',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+            db_insert_if_new_url(
+                    url=args['url'],
+                    content_type=args['content_type'],
+                    source='content_type_images',
+                    isopendir=False,
+                    visited=True,
+                    parent_host=args['parent_host'],
+                    resolution=npixels,
+                    db=args['db'])
             return False
         except OSError:
-            db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_images',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+            db_insert_if_new_url(
+                    url=args['url'],
+                    content_type=args['content_type'],
+                    source='content_type_images',
+                    isopendir=False,
+                    visited=True,
+                    parent_host=args['parent_host'],
+                    resolution=npixels,
+                    db=args['db'])
             return False
         if DOWNLOAD_ALL_IMAGES:
             img.save(IMAGES_FOLDER+'/' + filename, "PNG")
-        if CATEGORIZE_NSFW and npixels > MIN_NSFW_RES :
+        if CATEGORIZE_NSFW and npixels > MIN_NSFW_RES:
             image = n2.preprocess_image(img, n2.Preprocessing.YAHOO)
-            inputs = np.expand_dims(image, axis=0) 
+            inputs = np.expand_dims(image, axis=0)
             predictions = model.predict(inputs, verbose=0)
             sfw_probability, nsfw_probability = predictions[0]
-            db_insert_if_new_url(args['url'],content_type=args['content_type'],source='content_type_images',visited=True,parent_host=args['parent_host'],isnsfw=nsfw_probability,isopendir=False,resolution=npixels, db=args['db'])
+            db_insert_if_new_url(
+                    args['url'],
+                    content_type=args['content_type'],
+                    source='content_type_images',
+                    visited=True,
+                    parent_host=args['parent_host'],
+                    isnsfw=nsfw_probability,
+                    isopendir=False,
+                    resolution=npixels,
+                    db=args['db'])
             if nsfw_probability>NSFW_MIN_PROBABILITY:
                 print('porn {} {}'.format(nsfw_probability,args['url']))
                 if DOWNLOAD_NSFW:
@@ -511,7 +548,15 @@ def content_type_images(args):
             else:
                 if DOWNLOAD_SFW:
                     img.save(SFW_FOLDER +'/' +filename, "PNG")
-    db_insert_if_new_url(url=args['url'], content_type=args['content_type'],source='content_type_images',isopendir=False, visited=True,parent_host=args['parent_host'],resolution=npixels,db=args['db'])
+    db_insert_if_new_url(
+            url=args['url'],
+            content_type=args['content_type'],
+            source='content_type_images',
+            isopendir=False,
+            visited=True,
+            parent_host=args['parent_host'],
+            resolution=npixels,
+            db=args['db'])
     return True
 
 

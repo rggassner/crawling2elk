@@ -67,10 +67,26 @@ def get_http_or_https():
 
 def generate_random_port(ports, full_range=(1, 65535)):
     """
-    Generate a random port with weighted probabilities
-    https://scottbrownconsulting.com/2018/11/nmap-top-ports-frequencies-study/
-    LZR: Identifying Unexpected Internet Services
-    https://arxiv.org/pdf/2301.04841
+    Generate a random port with weighted probabilities.
+
+    Ports are selected based on their observed frequency in Internet-wide scans,
+    giving preference to common ports. This improves the realism of random
+    selection compared to uniform randomness.
+
+    Data sources:
+    - Nmap top ports frequency study:
+      https://scottbrownconsulting.com/2018/11/nmap-top-ports-frequencies-study/
+    - LZR: Identifying Unexpected Internet Services:
+      https://arxiv.org/pdf/2301.04841
+
+    Args:
+        ports (dict): A dictionary where keys are known TCP ports (int) and
+                      values are their relative frequencies (float).
+        full_range (tuple): The inclusive port range to consider (default: 1–65535).
+
+    Returns:
+        int: A randomly selected port, with selection probability weighted by
+             known port frequencies or minimal fallback weights for unknown ports.
     """
     # Get all ports and their weights
     known_ports = list(ports.keys())
@@ -79,7 +95,8 @@ def generate_random_port(ports, full_range=(1, 65535)):
     # Assign very small weights to ports with 0.000000
     min_known_weight = min(w for w in known_weights if w > 0)
     adjusted_weights = [
-            w if w > 0 else min_known_weight / 10 for w in known_weights]
+        w if w > 0 else min_known_weight / 10 for w in known_weights
+    ]
 
     # Add ports not in the known list with even smaller probabilities
     all_ports = list(range(full_range[0], full_range[1] + 1))

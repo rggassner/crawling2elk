@@ -259,6 +259,19 @@ def sanitize_url(
 
 
 def hash_url(url):
+    """
+    Generate a SHA-256 hash of a given URL string.
+
+    This function encodes the URL using UTF-8 and returns its SHA-256
+    hexadecimal digest. It's useful for uniquely identifying or indexing URLs
+    without storing the full plain text.
+
+    Args:
+        url (str): The URL string to be hashed.
+
+    Returns:
+        str: The hexadecimal representation of the SHA-256 hash of the URL.
+    """
     return hashlib.sha256(url.encode('utf-8')).hexdigest()
 
 
@@ -785,6 +798,7 @@ content_type_torrent_regex = [
 content_type_font_regex = [
         r"^woff$",
         r"^woff2$",
+        r"^font/eot$",
         r"^font/ttf$",
         r"^font/otf$",
         r"^font/sfnt$",
@@ -881,7 +895,6 @@ content_type_plain_text_regex = [
         r"^text/x-chdr$",
         r"^text/x-json$",
         r"^text/x-csrc$",
-        r"^text/x-python$",
         r"^text/turtle$",
         r"^text/webloc$",
         r"^text/x-vcard$",
@@ -890,10 +903,11 @@ content_type_plain_text_regex = [
         r"^text/x-bibtex$",
         r"^text/uri-list$",
         r"^text/markdown$",
-        r"^text/ecmascript$",
+        r"^text/x-python$",
         r"^text/directory$",
         r"^text/x-amzn-ion$",
         r"^text/javsacript$",
+        r"^text/ecmascript$",
         r"^text/x-vcalendar$",
         r"^text/x-component$",
         r"^application/text$",
@@ -905,6 +919,7 @@ content_type_plain_text_regex = [
         r"^application/ld\+json$",
         r"^application/ion\+json$",
         r"^application/hal\+json$",
+        r"^text/txtcharset=utf-8$",
         r"^applicaiton/jasvascript$",
         r"^application/json,charset=",
         r"^application/stream\+json$",
@@ -1009,6 +1024,7 @@ url_all_others_regex = [
 content_type_all_others_regex = [
         r"^$",
         r"^-$",
+        r"^js$",
         r"^\*$",
         r"^None$",
         r"^json$",
@@ -1029,6 +1045,7 @@ content_type_all_others_regex = [
         r"^Content-Type$",
         r"^octet/stream$",
         r"^cms/redirect$",
+        r"^message/news$",
         r"^\(null\)/ico$",
         r"^text/x-matlab$",
         r"^application/js$",
@@ -1073,12 +1090,14 @@ content_type_all_others_regex = [
         r"^application/msword$",
         r"^application/turtle$",
         r"^application/x-doom$",
+        r"^application/x-troff$",
         r"^binary/octet-stream$",
         r"^multipart/form-data$",
         r"^application/x-trash$",
         r"^application/msexcel$",
         r"^application/unknown$",
         r"^application/xml-dtd$",
+        r"^application/x-empty$",
         r"^application/gml\+xml$",
         r"^chemical/x-molconn-Z$",
         r"^application/x-ndjson$",

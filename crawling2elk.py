@@ -93,15 +93,27 @@ def is_host_block_listed(url):
 
     Returns:
         bool: True if the URL matches any blocklist pattern, False otherwise.
-    """    
+    """
     for regex in HOST_REGEX_BLOCK_LIST:
         if re.search(regex, url, flags=re.I | re.U):
             return True
     return False
 
 
-# Verify if url is in a blocklist.
 def is_url_block_listed(url):
+    """
+    Check if a given URL matches any pattern in the URL blocklist.
+
+    This function scans the input URL against a predefined list of regular
+    expressions (`URL_REGEX_BLOCK_LIST`) to determine if it should be blocked.
+    The match is performed in a case-insensitive and Unicode-aware manner.
+
+    Args:
+        url (str): The full URL to check against the blocklist.
+
+    Returns:
+        bool: True if the URL matches any blocklist pattern, False otherwise.
+    """
     for regex in URL_REGEX_BLOCK_LIST:
         if re.search(regex, url, flags=re.I | re.U):
             return True
@@ -541,13 +553,13 @@ def content_type_images(args):
                     isopendir=False,
                     resolution=npixels,
                     db=args['db'])
-            if nsfw_probability>NSFW_MIN_PROBABILITY:
-                print('porn {} {}'.format(nsfw_probability,args['url']))
+            if nsfw_probability > NSFW_MIN_PROBABILITY:
+                print('porn {} {}'.format(nsfw_probability, args['url']))
                 if DOWNLOAD_NSFW:
-                    img.save(NSFW_FOLDER +'/'+ filename, "PNG")
+                    img.save(NSFW_FOLDER + '/' + filename, "PNG")
             else:
                 if DOWNLOAD_SFW:
-                    img.save(SFW_FOLDER +'/' +filename, "PNG")
+                    img.save(SFW_FOLDER + '/' + filename, "PNG")
     db_insert_if_new_url(
             url=args['url'],
             content_type=args['content_type'],

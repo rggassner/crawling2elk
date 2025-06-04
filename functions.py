@@ -295,8 +295,29 @@ def remove_jsessionid_with_semicolon(url):
 
 
 def db_create_database(initial_url, db):
+    """
+    Create the Elasticsearch index structure used for storing crawled URLs,
+    and insert the initial seed URL if the index does not already exist.
+
+    This function defines the mapping (schema) for the `URLS_INDEX`, which includes
+    various metadata fields used during web crawling such as directory levels,
+    content type, whether the URL has been visited, open directory indicators, etc.
+
+    It creates the index if it doesn't already exist, and inserts the initial URL
+    as the first entry to kick off crawling.
+
+    Args:
+        initial_url (str): The initial URL to insert into the database.
+        db (object): A database wrapper that provides access to the Elasticsearch client
+                     (via `db.con`) and helper functions like `db_insert_if_new_url`.
+
+    Returns:
+        bool: True if the index was created or already existed and the insertion was attempted successfully,
+              False if there was an error during index creation or document insertion.
+    """
     print("Creating Elasticsearch index structure.")
     now_iso = datetime.now(timezone.utc).isoformat()
+
     # Define mappings for the URLS_INDEX
     urls_mapping = {
         "mappings": {
@@ -313,15 +334,16 @@ def db_create_database(initial_url, db):
                 "parent_host": {"type": "keyword"},
                 "host_levels": {"type": "keyword"},
                 "directory_levels": {"type": "keyword"},
-                "host_levels": {"type": "keyword"},
                 "file_extension": {"type": "keyword"},
                 "has_query": {"type": "boolean"},
                 "query_variables": {"type": "keyword"},
                 "query_values": {"type": "keyword"},
+                # Dynamically add keyword fields for directory level depth
                 **{
                     f"directory_level_{i+1}": {"type": "keyword"}
                     for i in range(MAX_DIR_LEVELS)
                 },
+                # Dynamically add keyword fields for host level depth
                 **{
                     f"host_level_{i+1}": {"type": "keyword"}
                     for i in range(MAX_HOST_LEVELS)
@@ -339,16 +361,20 @@ def db_create_database(initial_url, db):
     }
 
     try:
+        # Create index if it does not exist
         if not db.con.indices.exists(index=URLS_INDEX):
             db.con.indices.create(index=URLS_INDEX, body=urls_mapping)
             print("Created {} index.".format(URLS_INDEX))
+
+            # Insert the initial URL into the index to bootstrap crawling
             db_insert_if_new_url(
-                    url=initial_url,
-                    source='db_create_database',
-                    parent_host=urlsplit(initial_url)[1],
-                    db=db
-                )
+                url=initial_url,
+                source='db_create_database',
+                parent_host=urlsplit(initial_url)[1],
+                db=db
+            )
             print("Inserted initial url {}.".format(initial_url))
+
         return True
     except Exception as e:
         print("Error creating indices or inserting initial document:", e)
@@ -1083,6 +1109,7 @@ content_type_all_others_regex = [
         r"^application/node$",
         r"^application/smil$",
         r"^application/wasm$",
+        r"^application/x-js$",
         r"^application/mobi$",
         r"^application/save$",
         r"^application/null$",
@@ -1108,6 +1135,7 @@ content_type_all_others_regex = [
         r"^application/turtle$",
         r"^application/x-doom$",
         r"^application/x-troff$",
+        r"^text/remix-deferred$",
         r"^binary/octet-stream$",
         r"^multipart/form-data$",
         r"^application/x-trash$",
@@ -1218,6 +1246,7 @@ content_type_all_others_regex = [
         r"^application/vnd\.ms-officetheme$",
         r"^application/vnd\.wv\.csp\+wbxml$",
         r"^application/x-ms-dos-executable$",
+        r"^application/vnd\.1cbn\.v1\+json$",
         r"^application/x-pkcs7-certificates$",
         r"^application/vnd\.lotus-screencam$",
         r"^application/vnd\.imgur\.v1\+json$",

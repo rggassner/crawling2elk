@@ -118,27 +118,47 @@ def generate_random_port(ports, full_range=(1, 65535)):
 
 async def check_http(ip, port, protocol, verbose=False):
     """
-    Scan an HTTP or HTTPS service
+    Scan an HTTP or HTTPS service on a given IP and port.
+
+    Constructs a URL based on the provided IP, port, and protocol (either "http" or "https"),
+    and sends an asynchronous GET request using a randomized User-Agent. SSL certificate
+    validation is disabled to allow scanning of services with invalid or self-signed certs.
+
+    Args:
+        ip (str): The target IP address.
+        port (int): The target port number.
+        protocol (str): Either "http" or "https".
+        verbose (bool): If True, prints detailed progress and error messages.
+
+    Returns:
+        int or None: The HTTP response status code if the request succeeds, otherwise None.
     """
     if verbose:
         print(f"Scanning IP {ip} on port {port} ({protocol})...")
+
     url = f"{protocol}://{ip}:{port}"
     headers = {"User-Agent": UserAgent().random}
+
+    # Disable SSL certificate verification
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
+
     try:
         async with aiohttp.ClientSession(headers=headers) as session:
             async with session.get(
-                    url, timeout=5,
-                    ssl=ssl_context,
-                    allow_redirects=True) as response:
-                content = await response.text()
+                url,
+                timeout=5,
+                ssl=ssl_context,
+                allow_redirects=True
+            ) as response:
+                content = await response.text()  # Retrieve response body, if needed later
                 http_code = response.status
                 return http_code
     except Exception as e:
         if verbose:
             print(f"Error scanning {url} - {e}")
+
     return None
 
 

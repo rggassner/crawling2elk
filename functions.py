@@ -276,6 +276,19 @@ def hash_url(url):
 
 
 def remove_jsessionid_with_semicolon(url):
+    """
+    Remove Java session identifiers from URLs.
+
+    Specifically removes `;jsessionid=...` fragments that are often
+    appended to URLs by Java-based web applications to track sessions
+    without cookies.
+
+    Args:
+        url (str): The input URL possibly containing a `;jsessionid=` parameter.
+
+    Returns:
+        str: The URL with any `;jsessionid=...` segment removed.
+    """
     pattern = r';jsessionid=[^&?]*'
     cleaned_url = re.sub(pattern, '', url)
     return cleaned_url
@@ -717,6 +730,7 @@ content_type_compressed_regex = [
         r"^application/x-rar-compressed$",
         r"^application/x-zip-compressed$",
         r"^application/x-gtar-compressed$",
+        r"^application/vnd\.ms-cab-compressed$",
         r"^application/x-zip-compressedcontent-length:",
         r"^application/vnd\.adobe\.air-application-installer-package\+zip$",
     ]
@@ -738,6 +752,7 @@ content_type_image_regex = [
         r"^image$",
         r"^img/jpeg$",
         r"^image/\*$",
+        r"^image/ico$",
         r"^image/jp2$",
         r"^image/gif$",
         r"^image/png$",
@@ -1031,6 +1046,7 @@ content_type_all_others_regex = [
         r"^null$",
         r"^file$",
         r"^\*/\*$",
+        r"^binary$",
         r"^unknown$",
         r"^text/css$",
         r"^redirect$",
@@ -1048,6 +1064,7 @@ content_type_all_others_regex = [
         r"^message/news$",
         r"^\(null\)/ico$",
         r"^text/x-matlab$",
+        r"^text/x-invalid$",
         r"^application/js$",
         r"^application/\*$",
         r"^model/vnd\.mts$",
@@ -1277,6 +1294,7 @@ EXTENSION_MAP = {
         ".gz": content_type_compressed_regex,
         ".zip": content_type_compressed_regex,
         ".bz2": content_type_compressed_regex,
+        ".cab": content_type_compressed_regex,
         ".rar": content_type_compressed_regex,
         ".jpg": content_type_image_regex,
         ".JPG": content_type_image_regex,

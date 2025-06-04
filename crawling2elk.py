@@ -120,8 +120,20 @@ def is_url_block_listed(url):
     return False
 
 
-# Verify if url is in a allowlist.
 def is_host_allow_listed(url):
+    """
+    Check if a URL's host matches any regular expression in the allowlist.
+
+    This function iterates through the `HOST_REGEX_ALLOW_LIST`, which contains
+    regular expression patterns representing hosts that are explicitly allowed.
+    If the host part of the given URL matches any of the patterns, the function returns True.
+
+    Args:
+        url (str): The URL to evaluate.
+
+    Returns:
+        bool: True if the URL matches an allowlist pattern, False otherwise.
+    """
     for regex in HOST_REGEX_ALLOW_LIST:
         if re.search(regex, url, flags=re.I | re.U):
             return True
@@ -871,13 +883,21 @@ def content_type_compresseds(args):
 @function_for_content_type(content_type_all_others_regex)
 def content_type_ignore(args):
     # We update as visited.
-    db_insert_if_new_url(url=args['url'],visited=True,isopendir=False,content_type=args['content_type'],source='content_type_all_others_regex',parent_host=args['parent_host'],db=args['db'])
+    db_insert_if_new_url(
+            url=args['url'],
+            visited=True,
+            isopendir=False,
+            content_type=args['content_type'],
+            source='content_type_all_others_regex',
+            parent_host=args['parent_host'],
+            db=args['db']
+        )
     return True
 
 
 def sanitize_content_type(content_type):
-    content_type = content_type.strip() 
-    content_type = content_type.rstrip()      
+    content_type = content_type.strip()
+    content_type = content_type.rstrip()
     content_type = re.sub(r'^"(.*)"$', r"\1", content_type) # remove surrounding quotes if present
     content_type = re.sub(r'^content-type: (.*)"$', r"\1", content_type) # remove "content-type:" prefix
     content_type = re.sub(r'^content-type:(.*)"$', r"\1", content_type) # remove "content-type:" prefix  

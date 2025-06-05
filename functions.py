@@ -397,7 +397,42 @@ def db_insert_if_new_url(
         db=None,
         debug=False,
         fast_crawled=None):
+    """
+    Inserts a new URL document into the Elasticsearch database if it doesn't already exist.
+    If the document exists, updates selective fields based on the current data.
 
+    This function handles document deduplication by hashing the URL and uses
+    Elasticsearch's `scripted_upsert` mechanism to insert or update the document atomically.
+    It also adds metadata such as host levels, directory levels, query variables,
+    and file extensions for better query and filtering support.
+
+    Args:
+        url (str): The target URL to insert or update in the database.
+        isopendir (bool, optional): Indicates if the URL is an open directory.
+        visited (bool, optional): Flag indicating if the URL has been visited.
+        source (str, optional): Source of the URL (e.g., parent script or referring domain).
+        content_type (str, optional): The content type of the page (e.g., 'text/html').
+        words (str, optional): Extracted text content or word tokens from the page.
+        min_webcontent (str, optional): A minimal filtered version of the web content.
+        raw_webcontent (str, optional): The raw unprocessed HTML or page source.
+        isnsfw (float or str, optional): NSFW confidence score or label (0–1).
+        resolution (str or int, optional): Resolution value or score of the content.
+        parent_host (str, optional): Parent host from which the URL was discovered.
+        email (str, optional): Email address found on the page (if any).
+        db (object): Database object with a `.con.update()` method (Elasticsearch wrapper).
+        debug (bool): Enables verbose debug logging and value comparisons.
+        fast_crawled (bool, optional): Whether this URL was fast-crawled (vs. full crawl).
+
+    Returns:
+        bool: True if insert/update was successful, False if an error occurred.
+
+    Notes:
+        - This function uses `hash_url(url)` to generate a unique document ID.
+        - If the URL already exists, only fields with changed values are updated.
+        - Emails are appended to the `emails` array only if they are new.
+        - Host and directory levels are padded to fixed lengths for better filtering.
+        - Uses retry logic on version conflict errors (up to 2 attempts).
+    """
     host = urlsplit(url)[1]
     url = remove_jsessionid_with_semicolon(url)
     url = sanitize_url(url)
@@ -1243,6 +1278,7 @@ content_type_all_others_regex = [
         r"^application/vnd\.ms-fontobject$",
         r"^application/privatetempstorage$",
         r"^application/vnd\.ms-powerpoint$",
+        r"^application/apple\.vnd\.mpegurl$",
         r"^application/vnd\.ms-officetheme$",
         r"^application/vnd\.wv\.csp\+wbxml$",
         r"^application/x-ms-dos-executable$",

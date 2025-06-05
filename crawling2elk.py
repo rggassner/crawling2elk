@@ -141,6 +141,34 @@ def is_host_allow_listed(url):
 
 
 def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
+    """
+    Builds a dynamic Elasticsearch update script that only updates fields
+    if their values have changed or meet specific conditions. This reduces
+    unnecessary writes and keeps the `updated_at` timestamp accurate.
+
+    Special logic is applied for:
+    - `visited`: Only set it to True if it was previously null or False.
+    - `updated_at`: This is updated only if any field has actually changed.
+
+    Args:
+        doc (dict): A dictionary representing the fields to update in the document.
+                    Expected to include `updated_at` and may include `visited`.
+
+    Returns:
+        tuple[str, dict]: 
+            - A string representing the Elasticsearch painless script.
+            - A dictionary of parameters to be passed with the script (`params`).
+
+    Example:
+        doc = {
+            "visited": True,
+            "content_type": "text/html",
+            "updated_at": "2025-06-03T13:00:00Z"
+        }
+
+        script, params = build_conditional_update_script(doc)
+        # Use `script` and `params` with Elasticsearch update API
+    """
     script_lines = []
     params = {}
 
@@ -148,6 +176,7 @@ def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
         params[key] = value
 
         if key == "visited":
+            # Only set 'visited' to True if it is not already True
             script_lines.append(
                 "if (ctx._source.visited == null || "
                 "ctx._source.visited == false) {\n"
@@ -155,13 +184,14 @@ def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
                 "}"
             )
         elif key != "updated_at":
+            # Conditionally update other fields only if they changed
             script_lines.append(
                 f"if (ctx._source['{key}'] != params['{key}']) {{\n"
                 f"    ctx._source['{key}'] = params['{key}'];\n"
                 f"}}"
             )
 
-    # Only update updated_at if any other field changed
+    # Update `updated_at` only if anything in the source has changed
     script_lines.append(
         "if (ctx._source != params.existing_source_snapshot) {\n"
         "    ctx._source.updated_at = params.updated_at;\n"
@@ -898,10 +928,10 @@ def content_type_ignore(args):
 def sanitize_content_type(content_type):
     content_type = content_type.strip()
     content_type = content_type.rstrip()
-    content_type = re.sub(r'^"(.*)"$', r"\1", content_type) # remove surrounding quotes if present
-    content_type = re.sub(r'^content-type: (.*)"$', r"\1", content_type) # remove "content-type:" prefix
-    content_type = re.sub(r'^content-type:(.*)"$', r"\1", content_type) # remove "content-type:" prefix  
-    content_type = re.sub(r'^(.*?);.*$', r"\1",content_type) # keep only the type/subtype part
+    content_type = re.sub(r'^"(.*)"$', r"\1", content_type)  # remove surrounding quotes if present
+    content_type = re.sub(r'^content-type: (.*)"$', r"\1", content_type)  # remove "content-type:" prefix
+    content_type = re.sub(r'^content-type:(.*)"$', r"\1", content_type)  # remove "content-type:" prefix
+    content_type = re.sub(r'^(.*?);.*$', r"\1", content_type)  # keep only the type/subtype part
     content_type = re.sub(r'\s+', '', content_type)  # remove any remaining spaces
     return content_type
 

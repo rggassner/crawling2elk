@@ -205,7 +205,32 @@ def save_to_database(ip, port, protocol, status_code, verbose=False, db=None):
 
 async def scan_ips(ip_list, concurrency=4, verbose=False, db=None):
     """
-    Scan a randomized list of IPs for a randomly selected protocol and port.
+    Asynchronously scans a list of IP addresses using random protocols and ports.
+
+    For each IP in the list, this function randomly selects HTTP or HTTPS and then
+    either chooses a standard port (80/443) or a random non-standard port (based on
+    a global probability). It then performs an HTTP(S) request and logs any
+    successful responses to the database.
+
+    This is useful for stealthy or randomized probing across a set of IPs without
+    overwhelming the target or making predictable patterns.
+
+    Args:
+        ip_list (list): A list of IP addresses (as strings) to be scanned.
+        concurrency (int): The maximum number of concurrent scans (default is 4).
+        verbose (bool): Enables verbose output for logging and debugging.
+        db (object): Optional database object to store scan results (must support
+                     `save_to_database(ip, port, protocol, http_code, ...)`).
+
+    Returns:
+        None
+
+    Notes:
+        - Each IP is scanned with a single, random protocol/port combination.
+        - Uses a semaphore to limit concurrency and avoid flooding.
+        - Results with HTTP status codes are saved via `save_to_database()`.
+        - Port selection behavior is governed by the global `RANDOM_PORT_CHANCE`.
+
     """
     sem = asyncio.Semaphore(concurrency)
 

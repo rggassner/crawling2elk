@@ -163,17 +163,44 @@ async def check_http(ip, port, protocol, verbose=False):
 
 
 def save_to_database(ip, port, protocol, status_code, verbose=False, db=None):
+    """
+    Saves a discovered URL (based on IP, port, and protocol) to the database if it has a valid status code.
+
+    Parameters:
+    -----------
+    ip : str
+        The IP address of the host.
+    port : int
+        The port number the service is running on.
+    protocol : str
+        The protocol used (typically 'http' or 'https').
+    status_code : int or None
+        The HTTP status code returned from a previous request to the URL.
+        If None, the URL will not be saved.
+    verbose : bool, optional
+        If True, additional information will be printed (currently unused in the function).
+    db : object
+        A database connection or handler to be passed to the `db_insert_if_new_url` function.
+
+    Returns:
+    --------
+    None
+    """
     if status_code is not None:
+        # Build the URL string
+        url = f"{protocol}://{ip}:{port}"
+
+        # Insert into the database if it’s a new URL
         db_insert_if_new_url(
-                url=protocol+'://'+ip+':'+str(port),
-                visited=False,
-                source='port_scanner',
-                parent_host=ip, db=db)
-        print('Saved  {}://{}:{} status_code {} '.format(
-            protocol,
-            ip,
-            port,
-            status_code))
+            url=url,
+            visited=False,
+            source='port_scanner',
+            parent_host=ip,
+            db=db
+        )
+
+        # Log the result
+        print(f'Saved  {protocol}://{ip}:{port} status_code {status_code}')
 
 
 async def scan_ips(ip_list, concurrency=4, verbose=False, db=None):

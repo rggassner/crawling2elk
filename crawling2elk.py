@@ -202,6 +202,23 @@ def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
 
 
 def get_words(text: bytes | str) -> list[str]:
+    """
+    Extracts a list of top words from a given text input (bytes or string).
+
+    This function ensures the text is decoded to UTF-8 (if it's in bytes), handles
+    decoding errors gracefully, and passes the result to a word-extraction utility.
+
+    Args:
+        text (bytes | str): The input text to process. Can be raw bytes or a decoded string.
+
+    Returns:
+        list[str]: A list of extracted top words from the input text.
+                   Returns an empty list if input is empty or decoding fails.
+
+    Notes:
+        - If `text` is bytes, it's decoded using UTF-8 with replacement for errors.
+        - The actual word extraction logic is handled by `extract_top_words_from_text()`.
+    """    
     if not text:
         return []
     if isinstance(text, bytes):

@@ -676,6 +676,26 @@ def mark_url_as_fast_crawled(url, db):
         db=db,
         debug=False
     )
+    """
+    Marks a URL as having been fast-crawled using the extension-based crawler.
+
+    This function updates the corresponding URL document in the database, setting
+    the `fast_crawled` flag to True and tagging the source as
+    'fast_extension_crawler.no_match'.
+
+    Args:
+        url (str): The URL to mark as fast-crawled.
+        db (object): The database connection object used to perform the update.
+
+    Returns:
+        None
+
+    Notes:
+        - This function uses `db_insert_if_new_url()` internally to perform an upsert.
+        - If the URL does not already exist in the database, it will be created.
+        - This is typically used for URLs that were scanned but didn’t match
+          any criteria requiring deeper analysis.
+    """
 
 
 def get_host_levels(hostname):
@@ -1132,6 +1152,7 @@ content_type_all_others_regex = [
         r"^application/jsv$",
         r"^unknown/unknown$",
         r"^multipart/mixed$",
+        r"^application/cgi$",
         r"^text/javascript$",
         r"^application/xml$",
         r"^application/x-j$",

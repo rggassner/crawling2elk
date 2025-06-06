@@ -155,7 +155,7 @@ def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
                     Expected to include `updated_at` and may include `visited`.
 
     Returns:
-        tuple[str, dict]: 
+        tuple[str, dict]:
             - A string representing the Elasticsearch painless script.
             - A dictionary of parameters to be passed with the script (`params`).
 
@@ -218,7 +218,7 @@ def get_words(text: bytes | str) -> list[str]:
     Notes:
         - If `text` is bytes, it's decoded using UTF-8 with replacement for errors.
         - The actual word extraction logic is handled by `extract_top_words_from_text()`.
-    """    
+    """
     if not text:
         return []
     if isinstance(text, bytes):
@@ -230,6 +230,23 @@ def get_words(text: bytes | str) -> list[str]:
 
 
 def get_words_from_soup(soup) -> list[str]:
+    """
+    Extracts top words from the visible text content of a BeautifulSoup HTML document.
+
+    This function gathers all text strings from the soup object, excluding those
+    inside blacklisted tags (defined in `soup_tag_blocklist`), and then extracts
+    the most relevant words using `extract_top_words_from_text()`.
+
+    Args:
+        soup (bs4.BeautifulSoup): A BeautifulSoup object representing parsed HTML content.
+
+    Returns:
+        list[str]: A list of significant words extracted from the visible text content.
+
+    Notes:
+        - Tags in `soup_tag_blocklist` (e.g., <script>, <style>, etc.) are ignored.
+        - Text is combined into a single string before keyword extraction.
+    """    
     text_parts = [
         t for t in soup.find_all(string=True)
         if t.parent.name not in soup_tag_blocklist

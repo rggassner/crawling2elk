@@ -315,6 +315,16 @@ def generate_random_ips(count, include_networks=None, exclude_networks=None):
     return ips
 
 
+# Entry point for the IP scanner script.
+#
+# This block:
+# - Parses command-line arguments (e.g., --verbose)
+# - Loads the list of ports and their probabilities from a service inventory
+# - Generates a randomized list of IPs to scan, considering inclusion/exclusion networks
+# - Runs asynchronous scans using controlled concurrency
+# - Writes successful responses to the database
+# - Prints a message when the scan completes
+
 if __name__ == "__main__":
     db = DatabaseConnection()
     parser = argparse.ArgumentParser(

@@ -246,7 +246,7 @@ def get_words_from_soup(soup) -> list[str]:
     Notes:
         - Tags in `soup_tag_blocklist` (e.g., <script>, <style>, etc.) are ignored.
         - Text is combined into a single string before keyword extraction.
-    """    
+    """
     text_parts = [
         t for t in soup.find_all(string=True)
         if t.parent.name not in soup_tag_blocklist
@@ -256,6 +256,24 @@ def get_words_from_soup(soup) -> list[str]:
 
 
 def get_min_webcontent(soup):
+    """
+    Extracts minimal visible textual content from a BeautifulSoup object.
+
+    This function collects all text nodes from the HTML, excluding those that are
+    children of tags in a predefined blocklist (e.g., <script>, <style>). It returns
+    a single string with the combined visible text content.
+
+    Args:
+        soup (bs4.BeautifulSoup): A parsed HTML document.
+
+    Returns:
+        str: A space-separated string of visible text extracted from the HTML,
+             excluding content in ignored tags.
+
+    Example:
+        >>> get_min_webcontent(soup)
+        'Welcome to my website This is the homepage ...'
+    """
     text_parts = [
         t for t in soup.find_all(string=True)
         if t.parent.name not in soup_tag_blocklist
@@ -971,7 +989,7 @@ def sanitize_content_type(content_type):
 
 
 def get_page(url, driver, db):
-    original_url=url
+    original_url = url
     driver = read_web(url, driver)  # Fetch the page using Selenium
     parent_host = urlsplit(url)[1]  # Get the parent host from the URL
     if driver:

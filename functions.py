@@ -700,10 +700,32 @@ def mark_url_as_fast_crawled(url, db):
 
 def get_host_levels(hostname):
     """
-    Returns all host levels from right (TLD) to left (subdomain),
-    ignoring any port number.
-    """
+    Extracts hierarchical host levels from a hostname, excluding any port number.
 
+    This function splits the given hostname into its individual levels (e.g.,
+    subdomain, domain, TLD), ignoring any port suffix. It returns both the list
+    of parts and a dictionary mapping each part to a named key (e.g., 'host_level_1').
+
+    Args:
+        hostname (str): The hostname to process, potentially including a port.
+
+    Returns:
+        dict: A dictionary with:
+            - 'host_levels' (list[str]): List of host parts in left-to-right order.
+            - 'host_level_map' (dict[str, str]): Mapping of each level to a key like 'host_level_1', 'host_level_2', etc.
+
+    Example:
+        get_host_levels("sub.example.co.uk:443")
+        {
+            "host_levels": ["sub", "example", "co", "uk"],
+            "host_level_map": {
+                "host_level_1": "sub",
+                "host_level_2": "example",
+                "host_level_3": "co",
+                "host_level_4": "uk"
+            }
+        }
+    """
     hostname = hostname.split(':')[0]  # Remove port if present
     parts = hostname.split('.')
     parts_reversed = list(parts)

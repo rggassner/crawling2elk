@@ -271,7 +271,7 @@ def get_min_webcontent(soup):
              excluding content in ignored tags.
 
     Example:
-        >>> get_min_webcontent(soup)
+         get_min_webcontent(soup)
         'Welcome to my website This is the homepage ...'
     """
     text_parts = [
@@ -283,6 +283,30 @@ def get_min_webcontent(soup):
 
 
 def extract_top_words_from_text(text: str) -> list[str]:
+    """
+    Processes a text string and returns the most frequent words based on configuration.
+
+    This function cleans and normalizes the input text by optionally removing special
+    characters and converting it to lowercase. It then filters words by length, counts
+    their frequencies, and returns the top N most common words.
+
+    Behavior is controlled by the following global settings:
+        - WORDS_REMOVE_SPECIAL_CHARS (bool): If True, removes punctuation/special chars.
+        - WORDS_TO_LOWER (bool): If True, converts all words to lowercase.
+        - WORDS_MIN_LEN (int): Minimum word length to consider.
+        - WORDS_MAX_LEN (int): Maximum word length to consider.
+        - WORDS_MAX_WORDS (int): Number of top frequent words to return.
+
+    Args:
+        text (str): The input text to process.
+
+    Returns:
+        list[str]: A list of the most frequent words, ordered by frequency.
+
+    Example:
+        extract_top_words_from_text("Hello world! Hello again.")
+        ['hello', 'world', 'again']
+    """
     if WORDS_REMOVE_SPECIAL_CHARS:
         text = re.sub(r'[^\w\s]', ' ', text, flags=re.UNICODE)
     if WORDS_TO_LOWER:
@@ -999,7 +1023,14 @@ def get_page(url, driver, db):
                 status_code = request.response.status_code
                 if status_code in [301, 302, 303, 307, 308]:  # Redirection status codes
                     # Get the new URL from the Location header
-                    db_insert_if_new_url(url=url,visited=True,isopendir=False,source='get_page.redirect',parent_host=parent_host,db=db)
+                    db_insert_if_new_url(
+                            url=url,
+                            visited=True,
+                            isopendir=False,
+                            source='get_page.redirect',
+                            parent_host=parent_host,
+                            db=db
+                        )
                 # Continue with normal content processing 
                 if 'Content-Type' in request.response.headers:
                     url=request.url

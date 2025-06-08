@@ -740,10 +740,33 @@ def get_host_levels(hostname):
 
 def get_directory_levels(url_path):
     """
-    Extracts all directory levels from a URL path
-    and ensures correct numbering.
-    """
+    Extracts and maps directory levels from a given URL path.
 
+    This function splits the path portion of a URL into individual directory levels.
+    It ensures the result is always of length `MAX_DIR_LEVELS`, padding with empty
+    strings if necessary. It also returns a dictionary that maps each level to a
+    labeled key such as 'directory_level_1', 'directory_level_2', etc.
+
+    Args:
+        url_path (str): The path part of a URL (e.g., "/a/b/c/").
+
+    Returns:
+        dict: A dictionary with:
+            - 'directory_levels' (list[str]): List of directory segments.
+            - 'directory_level_map' (dict[str, str]): Mapping from labels to segments.
+
+    Example:
+        get_directory_levels("/products/electronics/phones/")
+        {
+            "directory_levels": ["products", "electronics", "phones", "", "", ...],
+            "directory_level_map": {
+                "directory_level_1": "products",
+                "directory_level_2": "electronics",
+                "directory_level_3": "phones",
+                ...
+            }
+        }
+    """
     # Split the URL path into parts and remove empty strings
     levels = [p for p in url_path.strip("/").split("/") if p]
 
@@ -1259,6 +1282,7 @@ content_type_all_others_regex = [
         r"^application/pkcs7-mime$",
         r"^application/javascript$",
         r"^application/oct-stream$",
+        r"^application/x-asciicast$",
         r"^applications/javascript$",
         r"^javascriptcharset=UTF-8$",
         r"^chemical/x-galactic-spc$",

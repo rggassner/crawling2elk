@@ -797,6 +797,8 @@ content_type_html_regex = [
         r"^text/vnd\.reddit\.partial\+html$",
     ]
 
+# Regex patterns to match MIDI audio content types in HTTP headers
+# Matches standard MIDI (audio/midi) and SP-MIDI (audio/sp-midi) formats
 content_type_midi_regex = [
         r"^audio/midi$",
         r"^audio/sp-midi$",
@@ -890,6 +892,7 @@ content_type_image_regex = [
         r"^image/jpg$",
         r"^image/any$",
         r"^image/heic$",
+        r"^image/fits$",
         r"^image/apng$",
         r"^image/avif$",
         r"^image/jpeg$",
@@ -1028,6 +1031,7 @@ content_type_plain_text_regex = [
         r"^text/yaml$",
         r"^text/x-go$",
         r"^text/x-js$",
+        r"^plain/text$",
         r"^text/x-csh$",
         r"^text/x-log$",
         r"^text/vcard$",
@@ -1264,6 +1268,7 @@ content_type_all_others_regex = [
         r"^application/x-bibtex$",
         r"^application/pkix-crl$",
         r"^httpd/unix-directory$",
+        r"^application/calques3d$",
         r"^application/n-triples$",
         r"^application/vnd\.smaf$",
         r"^application/geo\+json$",
@@ -1440,6 +1445,7 @@ EXTENSION_MAP = {
         ".gif": content_type_image_regex,
         ".svg": content_type_image_regex,
         ".HEIC": content_type_image_regex,
+        ".fits": content_type_image_regex,
         ".jpeg": content_type_image_regex,
         ".tiff": content_type_image_regex,
         ".pdf": content_type_pdf_regex,

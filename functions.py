@@ -783,6 +783,9 @@ def get_directory_levels(url_path):
     }
 
 
+# List of regex patterns used to match various content types that are considered HTML.
+# This helps normalize and detect HTML-like responses across different servers and formats.
+# Covers standard, non-standard, and vendor-specific content types.
 content_type_html_regex = [
         r"^text/html$",
         r"^text/html,text/html",

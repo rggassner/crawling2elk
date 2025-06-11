@@ -804,6 +804,10 @@ content_type_midi_regex = [
         r"^audio/sp-midi$",
     ]
 
+# Regex patterns to match various audio content types in HTTP headers
+# Covers standard audio formats (MP3, WAV, FLAC, OGG, etc.), streaming formats,
+# proprietary formats (WMA, RealAudio), playlist formats (M3U, PLS), and
+# generic binary types that may contain audio content
 content_type_audio_regex = [
         r"^audio/ogg$",
         r"^audio/mp3$",
@@ -870,6 +874,7 @@ content_type_pdf_regex = [
         r"^adobe/pdf$",
         r"^application/pdf$",
         r"^application/\.pdf$",
+        r"^application/x-pdf$",
         r"^application/pdfcontent-length:",
     ]
 
@@ -1191,6 +1196,7 @@ content_type_all_others_regex = [
         r"^test/plain$",
         r"^text/octet$",
         r"^text/x-scss$",
+        r"^application$",
         r"^Content-Type$",
         r"^octet/stream$",
         r"^cms/redirect$",
@@ -1201,10 +1207,12 @@ content_type_all_others_regex = [
         r"^application/js$",
         r"^application/\*$",
         r"^model/vnd\.mts$",
+        r"^text/x-haskell$",
         r"^application/jsv$",
         r"^unknown/unknown$",
         r"^multipart/mixed$",
         r"^application/cgi$",
+        r"^application/sql$",
         r"^text/javascript$",
         r"^application/xml$",
         r"^application/x-j$",
@@ -1230,6 +1238,7 @@ content_type_all_others_regex = [
         r"^chemical/x-cerius$",
         r"^application/x-rpm$",
         r"^application/x-twb$",
+        r"^application/x-xcf$",
         r"^application/x-msi$",
         r"^application/x-xar$",
         r"^model/gltf-binary$",
@@ -1251,6 +1260,7 @@ content_type_all_others_regex = [
         r"^application/unknown$",
         r"^application/xml-dtd$",
         r"^application/x-empty$",
+        r"^application/x-blorb$",
         r"^application/gml\+xml$",
         r"^chemical/x-molconn-Z$",
         r"^application/x-ndjson$",
@@ -1265,6 +1275,7 @@ content_type_all_others_regex = [
         r"^application/x-msword$",
         r"^application/pgp-keys$",
         r"^application/x-subrip$",
+        r"^application/msaccess$",
         r"^application/x-bibtex$",
         r"^application/pkix-crl$",
         r"^httpd/unix-directory$",
@@ -1281,6 +1292,7 @@ content_type_all_others_regex = [
         r"^application/x-msexcel$",
         r"^application/pkix-cert$",
         r"^application/smil\+xml$",
+        r"^application/typescript$",
         r"^application/feed\+json$",
         r"^application/x-director$",
         r"^application/postscript$",
@@ -1361,6 +1373,7 @@ content_type_all_others_regex = [
         r"^application/x-pkcs7-certificates$",
         r"^application/vnd\.lotus-screencam$",
         r"^application/vnd\.imgur\.v1\+json$",
+        r"^application/grpc-web-text\+proto$",
         r"^application/vnd\.adobe\.dex\+json$",
         r"^application/x-www-form-urlencoded$",
         r"^application/vnd\.google-earth\.kmz$",
@@ -1407,6 +1420,7 @@ content_type_all_others_regex = [
         r"^application/vnd\.adobe\.error-response\+json$",
         r"^application/vnd\.vimeo\.profilesection\+json$",
         r"^application/vnd\.abc\.terminus\.content\+json$",
+        r"^application/javascript,application/javascript$",
         r"^application/vnd\.vimeo\.video\.texttrack\+json$",
         r"^application/vnd\.contentful\.delivery\.v1\+json$",
         r"^application/javascript,application/x-javascript$",

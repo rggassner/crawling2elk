@@ -396,28 +396,27 @@ def is_open_directory(content, content_url):
 
 
 def function_for_url(regexp_list):
-   """
-   Decorator factory that registers a function to handle URLs matching given regex patterns.
-   
-   This decorator allows you to associate a handler function with specific URL patterns
-   in the crawler. When a URL matches any of the provided regular expressions, the
-   decorated function will be called to process that URL.
-   
-   Args:
-       regexp_list (list): List of regex pattern strings that define which URLs
-                          this function should handle. Patterns are compiled with
-                          case-insensitive and Unicode flags.
-   
-   Returns:
-       function: A decorator function that registers the decorated function
-                as a URL handler and adds it to the global url_functions list.
-   
-   Example:
-       @function_for_url([r'.*\.pdf$', r'.*\.doc$'])
-       def handle_documents(url, content):
-           # Process PDF and DOC files
-           pass
-   """
+    """
+    Decorator factory that registers a function to handle URLs matching given regex patterns.
+    This decorator allows you to associate a handler function with specific URL patterns
+    in the crawler. When a URL matches any of the provided regular expressions, the
+    decorated function will be called to process that URL.
+
+    Args:
+        regexp_list (list): List of regex pattern strings that define which URLs
+                           this function should handle. Patterns are compiled with
+                           case-insensitive and Unicode flags.
+
+    Returns:
+        function: A decorator function that registers the decorated function
+                 as a URL handler and adds it to the global url_functions list.
+
+    Example:
+        @function_for_url([r'.*pdf$', r'.*doc$'])
+        def handle_documents(url, content):
+            # Process PDF and DOC files
+            pass
+    """
     def get_url_function(f):
         for regexp in regexp_list:
             url_functions.append((re.compile(regexp, flags=re.I | re.U), f))
@@ -426,7 +425,6 @@ def function_for_url(regexp_list):
 
 
 # url unsafe {}|\^~[]`
-# regex no need to escape '!', '"', '%', "'", ',', '/', ':', ';', '<', '=', '>', '@', and "`"
 @function_for_url(
     [
         r"^(\/|\.\.\/|\.\/)",
@@ -435,6 +433,36 @@ def function_for_url(regexp_list):
     ]
 )
 def relative_url(args):
+    """
+    Handle relative URLs found during crawling and convert them to absolute URLs.
+
+    regex no need to escape '!', '"', '%', "'", ',', '/', ':', ';', '<', '=', '>', '@', and "`"
+
+    This function processes URLs that are relative to the current page (starting with
+    '/', '../', or './') or contain various characters commonly found in web URLs.
+    It converts relative URLs to absolute URLs using the parent page's URL as a base,
+    then adds the new URL to the database for future crawling.
+
+    The function is registered to handle URLs matching these patterns:
+    - Relative paths starting with '/', '../', or './'
+    - URLs containing alphanumeric characters, common punctuation, and special
+      characters typically found in web addresses
+    - Complex URLs with query parameters and fragments
+
+    Args:
+        args (dict): Dictionary containing:
+            - 'url' (str): The relative URL to process
+            - 'parent_url' (str): The absolute URL of the page containing this link
+            - 'db': Database connection object for storing new URLs
+
+    Returns:
+        bool: Always returns True to indicate successful processing
+
+    Note:
+        URLs are marked as unvisited when added to the database. The regex patterns
+        include various Unicode characters and symbols to handle international URLs
+        and special formatting characters found in web content.
+    """
     out_url = urljoin(args['parent_url'], args['url'])
     parent_host = urlsplit(args['parent_url'])[1]
     db_insert_if_new_url(url=out_url, visited=False, source="relative_url", parent_host=parent_host, db=args['db'])
@@ -447,6 +475,37 @@ def relative_url(args):
     ]
 )
 def unsafe_character_url(args):
+    """
+    Handle URLs containing unsafe or problematic characters by ignoring them.
+
+    This function is registered to catch URLs that contain characters which are
+    considered unsafe or problematic for URL processing, specifically:
+    - Curly braces: { }
+    - Square brackets: [ ]
+    - Pipe symbol: |
+    - Tilde: ~
+    - Caret: ^
+    - Backslash: \
+
+    These characters can cause issues in URL parsing, are often found in malformed
+    URLs, or may indicate URLs that are not standard web addresses (e.g., template
+    variables, placeholder text, or escaped content).
+
+    Args:
+        args (dict): Dictionary containing URL processing arguments:
+            - 'url' (str): The URL containing unsafe characters
+            - 'parent_url' (str): The URL of the parent page
+            - 'db': Database connection object
+
+    Returns:
+        bool: Always returns True, effectively filtering out these URLs by
+              not processing them further (no database insertion occurs)
+
+    Note:
+        This function acts as a URL filter - it accepts these URLs but doesn't
+        process them, preventing potentially problematic URLs from being added
+        to the crawling queue.
+    """
     return True
 
 
@@ -1090,7 +1149,13 @@ def get_page(url, driver, db):
                         content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
                     except ValueError as e:  # 🛠️ Catch specific Brotli decompression failure
                         if "BrotliDecompress failed" in str(e):
-                            db_insert_if_new_url(url=url,visited=True,source='BrotliDecompressFailed',parent_host=parent_host,db=db)
+                            db_insert_if_new_url(
+                                    url=url,
+                                    visited=True,
+                                    source='BrotliDecompressFailed',
+                                    parent_host=parent_host,
+                                    db=db
+                                )
                             continue
                         elif "LookupError when decoding" in str(e):
                             db_insert_if_new_url(url=url,visited=True,source='lookuperror',parent_host=parent_host,db=db)

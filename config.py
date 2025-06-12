@@ -67,6 +67,9 @@ AUDIOS_FOLDER = 'audios'
 DOWNLOAD_PDFS = False
 PDFS_FOLDER = 'pdfs'
 
+DOWNLOAD_DATABASES = False
+DATABASES_FOLDER = 'databases'
+
 DOWNLOAD_DOCS = False
 DOCS_FOLDER = 'docs'
 
@@ -149,7 +152,8 @@ BE_GREEDY = False
 # Do not crawl these domains.
 HOST_REGEX_BLOCK_LIST = [
     r'localhost:4443$',
-    r'(^|\.)google$',
+    r'(^|\.)google\.com$',
+    r'(^|\.)gstatic\.com$',
 ]
 
 # Do not crawl urls that match any of these regexes

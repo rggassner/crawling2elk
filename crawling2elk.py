@@ -511,8 +511,33 @@ def unsafe_character_url(args):
 
 @function_for_url(url_all_others_regex)
 def do_nothing_url(args):
-    # Do nothing with these regex. They are kept here only as a guideline if you
-    # want to write your own functions for them
+    """
+    Placeholder function that handles URLs matching catch-all patterns without processing.
+
+    This function is registered to handle URLs that match patterns defined in
+    url_all_others_regex but don't require any specific processing. It serves as
+    a no-op handler that prevents these URLs from being processed by other functions
+    while keeping the regex patterns available as reference.
+
+    The function acts as a documentation mechanism, preserving regex patterns that
+    might be useful for future development or customization without actively
+    processing the matched URLs.
+
+    Args:
+        args (dict): Dictionary containing URL processing arguments:
+            - 'url' (str): The URL that matched the catch-all patterns
+            - 'parent_url' (str): The URL of the parent page
+            - 'db': Database connection object
+
+    Returns:
+        bool: Always returns True to indicate the URL was "handled" (by doing nothing)
+
+    Note:
+        This function serves as a template - developers can replace this implementation
+        with custom logic for handling specific URL patterns as needed. The regex
+        patterns in url_all_others_regex are preserved as a guideline for future
+        functionality.
+    """
     return True
 
 
@@ -984,6 +1009,43 @@ def content_type_docs(args):
     return True
 
 
+@function_for_content_type(content_type_database_regex)
+def content_type_databases(args):
+    db_insert_if_new_url(
+        url=args['url'],
+        content_type=args['content_type'],
+        isopendir=False,
+        visited=True,
+        source='content_type_databases',
+        parent_host=args['parent_host'],
+        db=args['db']
+    )
+    if not DOWNLOAD_DATABASES:
+        return True
+    url = args['url']
+    base_filename = os.path.basename(urlparse(url).path)
+    try:
+        decoded_name = unquote(base_filename)
+    except Exception:
+        decoded_name = base_filename
+    # Separate extension (e.g., ".pdf")
+    name_part, ext = os.path.splitext(decoded_name)
+    # Sanitize both parts
+    name_part = re.sub(r"[^\w\-.]", "_", name_part)
+    ext = re.sub(r"[^\w\-.]", "_", ext)
+    # Create URL hash prefix (always fixed length)
+    url_hash = hashlib.sha256(url.encode()).hexdigest()
+    # Max length for entire filename (255) minus hash + dash + extension + safety margin
+    max_name_length = MAX_FILENAME_LENGTH - len(url_hash) - 1 - len(ext)
+    if len(name_part) > max_name_length:
+        name_part = name_part[:max_name_length - 3] + "..."
+    safe_filename = f"{url_hash}-{name_part}{ext}"
+    filepath = os.path.join(DATABASES_FOLDER, safe_filename)
+    with open(filepath, "wb") as f:
+        f.write(args['content'])
+    return True
+
+
 @function_for_content_type(content_type_font_regex)
 def content_type_fonts(args):
     db_insert_if_new_url(
@@ -1158,19 +1220,43 @@ def get_page(url, driver, db):
                                 )
                             continue
                         elif "LookupError when decoding" in str(e):
-                            db_insert_if_new_url(url=url,visited=True,source='lookuperror',parent_host=parent_host,db=db)
+                            db_insert_if_new_url(
+                                    url=url,
+                                    visited=True,
+                                    source='lookuperror',
+                                    parent_host=parent_host,
+                                    db=db
+                                )
                             continue
                         elif "EOFError when decoding" in str(e):
-                            db_insert_if_new_url(url=url,visited=True,source='EOFERROR',parent_host=parent_host,db=db)
+                            db_insert_if_new_url(
+                                    url=url,
+                                    visited=True,
+                                    source='EOFERROR',
+                                    parent_host=parent_host,
+                                    db=db
+                                )
                             continue
                         elif "BadGzipFile when decoding" in str(e):
-                            db_insert_if_new_url(url=url,visited=True,source='BadGzipFile',parent_host=parent_host,db=db)
+                            db_insert_if_new_url(
+                                    url=url,
+                                    visited=True,
+                                    source='BadGzipFile',
+                                    parent_host=parent_host,
+                                    db=db
+                                )
                             continue
                         elif "UnicodeDecodeError when decoding" in str(e):
-                            db_insert_if_new_url(url=url,visited=True,source='UnicodeDecodeError',parent_host=parent_host,db=db)
+                            db_insert_if_new_url(
+                                    url=url,
+                                    visited=True,
+                                    source='UnicodeDecodeError',
+                                    parent_host=parent_host,
+                                    db=db
+                                )
                             continue
                         else:
-                            print(f"\033[91m🚨 !!!! This was not updated in the database, you need to deal with this error in the code function get_page [DECODE ERROR] {url} - {e} -\033[0m")
+                            print(f"\033[91m !!!! This was not updated in the database, you need to deal with this error in the code function get_page [DECODE ERROR] {url} - {e} -\033[0m")
                             continue
                     content_type = request.response.headers['Content-Type']
                     content_type = sanitize_content_type(content_type)
@@ -1185,7 +1271,7 @@ def get_page(url, driver, db):
                             m = regex.search(content_type)
                             if m:
                                 found = True
-                                function({'url': url, 'visited': True, 'content_type': content_type, 
+                                function({'url': url, 'visited': True, 'content_type': content_type,
                                           'content': content, 'source': 'get_page', 'words': '', 
                                           'parent_host': parent_host, 'db': db})
                         if not found:
@@ -1766,16 +1852,17 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
                 found = True
 
                 needs_download = (
+                    (function.__name__ == "content_type_audios" and DOWNLOAD_AUDIOS) or
+                    (function.__name__ == "content_type_compresseds" and DOWNLOAD_COMPRESSEDS) or
+                    (function.__name__ == "content_type_databases" and DOWNLOAD_DATABASES) or
                     (function.__name__ == "content_type_docs" and DOWNLOAD_DOCS) or
                     (function.__name__ == "content_type_fonts" and DOWNLOAD_FONTS) or
-                    (function.__name__ == "content_type_torrents" and DOWNLOAD_TORRENTS) or
-                    (function.__name__ == "content_type_pdfs" and DOWNLOAD_PDFS) or
-                    (function.__name__ == "content_type_compresseds" and DOWNLOAD_COMPRESSEDS) or
-                    (function.__name__ == "content_type_audios" and DOWNLOAD_AUDIOS) or
-                    (function.__name__ == "content_type_midis" and DOWNLOAD_MIDIS) or
                     (function.__name__ == "content_type_images" and DOWNLOAD_NSFW) or 
                     (function.__name__ == "content_type_images" and DOWNLOAD_SFW) or 
-                    (function.__name__ == "content_type_images" and DOWNLOAD_ALL_IMAGES)
+                    (function.__name__ == "content_type_images" and DOWNLOAD_ALL_IMAGES) or
+                    (function.__name__ == "content_type_midis" and DOWNLOAD_MIDIS) or
+                    (function.__name__ == "content_type_pdfs" and DOWNLOAD_PDFS) or
+                    (function.__name__ == "content_type_torrents" and DOWNLOAD_TORRENTS)
                 )
 
                 content = None

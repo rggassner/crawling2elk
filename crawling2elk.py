@@ -543,6 +543,32 @@ def do_nothing_url(args):
 
 @function_for_url([r"^https*://", r"^ftp://"])
 def full_url(args):
+    """
+    Handle absolute URLs (HTTP, HTTPS, FTP) found during crawling.
+
+    This function processes fully-qualified URLs that include a complete protocol
+    and domain. It extracts the parent host information and adds the URL to the
+    crawling database for future processing.
+
+    The function is registered to handle URLs matching these patterns:
+    - HTTP URLs: http://example.com/path
+    - HTTPS URLs: https://example.com/path
+    - FTP URLs: ftp://example.com/path
+
+    Args:
+        args (dict): Dictionary containing:
+            - 'url' (str): The absolute URL to process
+            - 'parent_url' (str): The URL of the page containing this link
+            - 'db': Database connection object for storing new URLs
+
+    Returns:
+        bool: Always returns True to indicate successful processing
+
+    Note:
+        URLs are marked as unvisited when added to the database. The parent_host
+        is extracted from the parent_url to track the source of discovered links,
+        which can be useful for crawling analytics and avoiding infinite loops.
+    """
     parent_host = urlsplit(args['parent_url'])[1]
     db_insert_if_new_url(url=args['url'], source="full_url", visited=False, parent_host=parent_host, db=args['db'])
     return True
@@ -1271,15 +1297,34 @@ def get_page(url, driver, db):
                             m = regex.search(content_type)
                             if m:
                                 found = True
-                                function({'url': url, 'visited': True, 'content_type': content_type,
-                                          'content': content, 'source': 'get_page', 'words': '', 
-                                          'parent_host': parent_host, 'db': db})
+                                function({
+                                    'url': url,
+                                    'visited': True,
+                                    'content_type': content_type,
+                                    'content': content,
+                                    'source': 'get_page',
+                                    'words': '',
+                                    'parent_host': parent_host,
+                                    'db': db}
+                                )
                         if not found:
                             print(f"UNKNOWN type -{url}- -{content_type}-")
-        #force update on main url
-        db_insert_if_new_url(url=url,visited=True,source='get_page.end',parent_host=parent_host,db=db)
-    #force update on main url
-    db_insert_if_new_url(url=original_url,visited=True,source='get_page.end.original',parent_host=parent_host,db=db)
+        # force update on main url
+        db_insert_if_new_url(
+                url=url,
+                visited=True,
+                source='get_page.end',
+                parent_host=parent_host,
+                db=db
+            )
+    # force update on main url
+    db_insert_if_new_url(
+            url=original_url,
+            visited=True,
+            source='get_page.end.original',
+            parent_host=parent_host,
+            db=db
+        )
 
 
 class TimeoutException(Exception):
@@ -1361,7 +1406,7 @@ def initialize_driver():
     user_agent = UserAgent().random
     options = webdriver.ChromeOptions()
     options.add_argument(f'user-agent={user_agent}')
-    prefs = {"download.default_directory": DIRECT_LINK_DOWNLOAD_FOLDER,}
+    prefs = {"download.default_directory": DIRECT_LINK_DOWNLOAD_FOLDER}
     if not CATEGORIZE_NSFW and not DOWNLOAD_ALL_IMAGES and not FORCE_IMAGE_LOAD:
         prefs["profile.managed_default_content_settings.images"] = 2  # disable images
     if BLOCK_CSS:

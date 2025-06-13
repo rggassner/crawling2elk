@@ -169,7 +169,7 @@ This makes the engine modular and powerful for specialized scraping and analysis
 
 ## TODO
 
-- Crawl based on web search.
+- Create crawling method to websearch a random word.
 
 * * *
 

@@ -890,6 +890,11 @@ content_type_pdf_regex = [
         r"^application/pdfcontent-length:",
     ]
 
+# Regex patterns to match various image content types in HTTP headers
+# Covers standard image formats (PNG, JPEG, GIF, WebP, etc.), modern formats
+# (AVIF, HEIC), vector graphics (SVG), specialized formats (FITS, DWG), and
+# malformed/non-standard MIME types including bare format names, null values,
+# and data URLs that the crawler might encounter
 content_type_image_regex = [
         r"^png$",
         r"^webp$",
@@ -909,6 +914,7 @@ content_type_image_regex = [
         r"^image/pbf$",
         r"^image/png$",
         r"^image/svg$",
+        r"^(null)/ico$",
         r"^image/heic$",
         r"^image/fits$",
         r"^image/apng$",
@@ -919,6 +925,7 @@ content_type_image_regex = [
         r"^image/pjpeg$",
         r"^image/x-png$",
         r"^image/x-eps$",
+        r"^\(null\)/ico$",
         r"^image/dicomp$",
         r"^image/x-icon$",
         r"^image/\{png\}$",
@@ -941,6 +948,7 @@ content_type_image_regex = [
 content_type_database_regex = [
         r"^application/sql$",
         r"^application/msaccess$",
+        r"^application/x-msaccess$",
         ]
 
 content_type_doc_regex = [
@@ -1218,7 +1226,6 @@ content_type_all_others_regex = [
         r"^model/stl$",
         r"^model/obj$",
         r"^model/step$",
-        r"^(null)/ico$",
         r"^test/plain$",
         r"^text/octet$",
         r"^text/x-scss$",
@@ -1227,7 +1234,6 @@ content_type_all_others_regex = [
         r"^octet/stream$",
         r"^cms/redirect$",
         r"^message/news$",
-        r"^\(null\)/ico$",
         r"^text/x-matlab$",
         r"^text/x-invalid$",
         r"^application/js$",
@@ -1279,12 +1285,15 @@ content_type_all_others_regex = [
         r"^application/x-troff$",
         r"^text/remix-deferred$",
         r"^binary/octet-stream$",
+        r"^application/express$",
         r"^multipart/form-data$",
         r"^application/x-trash$",
         r"^application/unknown$",
         r"^application/xml-dtd$",
         r"^application/x-empty$",
         r"^application/x-blorb$",
+        r"^application/rfc\+xml$",
+        r"^application/x-netcdf$",
         r"^application/gml\+xml$",
         r"^chemical/x-molconn-Z$",
         r"^application/x-ndjson$",
@@ -1341,6 +1350,7 @@ content_type_all_others_regex = [
         r"^application/x-msdownload$",
         r"^application/octet-stream$",
         r"^application/vnd\.ms-word$",
+        r"^application/v3\.24\+json$",
         r"^application/x-executable$",
         r"^application/marcxml\+xml$",
         r"^application/v3\.25\+json$",
@@ -1408,6 +1418,7 @@ content_type_all_others_regex = [
         r"^application/speculationrules\+json$",
         r"^application/vnd\.vimeo\.user\+json$",
         r"^application/octet-stream,text/html$",
+        r"^application/vnd\.wg\.cds_api\+json$",
         r"^application/json-amazonui-streaming$",
         r"^application/vnd\.vimeo\.video\+json$",
         r"^application/x-research-info-systems$",
@@ -1493,6 +1504,7 @@ EXTENSION_MAP = {
         ".woff": content_type_font_regex,
         ".woff2": content_type_font_regex,
         ".gif": content_type_image_regex,
+        ".ico": content_type_image_regex,
         ".jp2": content_type_image_regex,
         ".jpg": content_type_image_regex,
         ".JPG": content_type_image_regex,

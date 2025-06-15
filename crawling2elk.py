@@ -580,6 +580,40 @@ def full_url(args):
     ]
 )
 def email_url(args):
+    """
+    Extract and validate email addresses from mailto links and similar email schemes.
+    
+    This function processes URLs that contain email addresses using various mailto
+    schemes, including common misspellings and variations. It extracts the email
+    address, validates its format, and stores it in the database if valid.
+    
+    The function handles numerous mailto variations including:
+    - Standard: mailto:, mail:, email:
+    - Common typos: maillto:, maito:, malito:, maltio:, etc.
+    - Multi-language: "Email para:", "E-mail:", etc.
+    - Malformed: mailton:, mailtfo:, mail.to:, etc.
+    
+    Args:
+        args (dict): Dictionary containing:
+            - 'url' (str): The mailto URL to process
+            - 'parent_url' (str): The URL of the page containing this email link
+            - 'db': Database connection object for storing email data
+    
+    Returns:
+        bool: True if a valid email address was found and stored, False otherwise
+        
+    Process:
+        1. Uses regex to match and extract email schemes (case-insensitive)
+        2. Extracts the email address portion after the scheme
+        3. Validates email format using standard email regex pattern
+        4. If valid, stores the parent URL and email address in database
+        5. Returns success/failure status
+        
+    Note:
+        Only stores emails that pass basic format validation. The parent_url
+        is stored rather than the mailto URL itself, as it represents the
+        source page where the email was found.
+    """    
     address_search = re.search(
         r"^(mailto:|maillto:|maito:|mail:|malito:|mailton:|\"mailto:|emailto:|maltio:|mainto:|E\-mail:|mailtfo:|mailtp:|mailtop:|mailo:|mail to:|Email para:|email :|email:|E-mail: |mail-to:|maitlo:|mail.to:)(.*)",
         args['url'],

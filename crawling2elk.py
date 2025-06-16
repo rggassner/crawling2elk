@@ -582,38 +582,38 @@ def full_url(args):
 def email_url(args):
     """
     Extract and validate email addresses from mailto links and similar email schemes.
-    
+
     This function processes URLs that contain email addresses using various mailto
     schemes, including common misspellings and variations. It extracts the email
     address, validates its format, and stores it in the database if valid.
-    
+
     The function handles numerous mailto variations including:
     - Standard: mailto:, mail:, email:
     - Common typos: maillto:, maito:, malito:, maltio:, etc.
     - Multi-language: "Email para:", "E-mail:", etc.
     - Malformed: mailton:, mailtfo:, mail.to:, etc.
-    
+
     Args:
         args (dict): Dictionary containing:
             - 'url' (str): The mailto URL to process
             - 'parent_url' (str): The URL of the page containing this email link
             - 'db': Database connection object for storing email data
-    
+
     Returns:
         bool: True if a valid email address was found and stored, False otherwise
-        
+
     Process:
         1. Uses regex to match and extract email schemes (case-insensitive)
         2. Extracts the email address portion after the scheme
         3. Validates email format using standard email regex pattern
         4. If valid, stores the parent URL and email address in database
         5. Returns success/failure status
-        
+
     Note:
         Only stores emails that pass basic format validation. The parent_url
         is stored rather than the mailto URL itself, as it represents the
         source page where the email was found.
-    """    
+    """
     address_search = re.search(
         r"^(mailto:|maillto:|maito:|mail:|malito:|mailton:|\"mailto:|emailto:|maltio:|mainto:|E\-mail:|mailtfo:|mailtp:|mailtop:|mailo:|mail to:|Email para:|email :|email:|E-mail: |mail-to:|maitlo:|mail.to:)(.*)",
         args['url'],
@@ -641,6 +641,43 @@ def email_url(args):
 
 
 def get_links(soup, content_url, db):
+    """
+    Extract and process all hyperlinks from a parsed HTML page.
+
+    This function finds all anchor tags (<a>) in the provided BeautifulSoup object,
+    extracts their href attributes, and processes each URL through the crawler's
+    URL handling system. It applies filtering based on allow/block lists and
+    routes URLs to appropriate handler functions.
+
+    Args:
+        soup (BeautifulSoup): Parsed HTML content containing anchor tags
+        content_url (str): The URL of the current page being processed
+        db: Database connection object for storing discovered URLs
+
+    Returns:
+        bool: Always returns True indicating successful processing
+
+    Process:
+        1. Finds all anchor tags in the HTML
+        2. Extracts and sanitizes href attributes
+        3. Handles relative URLs by using the current page's host
+        4. Applies host and URL filtering (allow/block lists)
+        5. Routes URLs through registered handler functions via url_functions
+        6. For unmatched URLs, prints debug info and optionally adds to database
+           if BE_GREEDY flag is enabled
+
+    Filtering:
+        - Skips non-string href values
+        - Applies host block/allow list filtering
+        - Applies URL-specific block list filtering
+        - Only processes URLs from allowed hosts
+
+    Note:
+        Contains commented code for extracting patterns from JavaScript,
+        which can be uncommented for additional link discovery from scripts.
+        The BE_GREEDY flag controls whether unmatched URLs are still added
+        to the crawling queue for potential future processing.
+    """
     # If you want to grep some patterns, use the code below.
     # pattern=r'"file":{".*?":"(.*?)"}'
     # for script in soup.find_all('script',type="text/javascript"):
@@ -1456,14 +1493,13 @@ def initialize_driver():
         options.add_argument('--blink-settings=imagesEnabled=false')
     options.add_argument('--ignore-certificate-errors-spki-list')
     options.add_argument('--ignore-ssl-errors')
-    #options.add_argument('--disable-webrtc')
-    #options.add_argument('--disable-geolocation')
-    #options.add_argument('--disable-infobars')
-    #options.add_argument('--disable-popup-blocking')
-    #options.add_argument('--disable-javascript')
-    #options.add_argument('--proxy-server=http://your-proxy-server:port')
-    #options.add_argument('--proxy-server=http://'+PROXY_HOST+':'PROXY_PORT)
-
+    # options.add_argument('--disable-webrtc')
+    # options.add_argument('--disable-geolocation')
+    # options.add_argument('--disable-infobars')
+    # options.add_argument('--disable-popup-blocking')
+    # options.add_argument('--disable-javascript')
+    # options.add_argument('--proxy-server=http://your-proxy-server:port')
+    # options.add_argument('--proxy-server=http://'+PROXY_HOST+':'PROXY_PORT)
     # The three options below must be enabled to allow navigating http sites
     # through the localhost https server
     options.add_argument("--ignore-certificate-errors")
@@ -1487,9 +1523,9 @@ def crawler(db):
                 try:
                     print('    {}'.format(target_url['url']))
                     del driver.requests
-                    get_page(target_url['url'], driver,db)
+                    get_page(target_url['url'], driver, db)
                     if HUNT_OPEN_DIRECTORIES:
-                        insert_directory_tree(target_url['url'],db)
+                        insert_directory_tree(target_url['url'], db)
                 except UnicodeEncodeError:
                     pass
         driver.quit()

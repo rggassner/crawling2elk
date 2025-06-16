@@ -945,6 +945,9 @@ content_type_image_regex = [
         r"^application/jpg$",
     ]
 
+# Regex patterns to match database file content types in HTTP headers
+# Covers SQL files and Microsoft Access database formats including
+# standard and x-prefixed MIME type variations
 content_type_database_regex = [
         r"^application/sql$",
         r"^application/msaccess$",

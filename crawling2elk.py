@@ -723,6 +723,29 @@ def get_links(soup, content_url, db):
 
 
 def function_for_content_type(regexp_list):
+    """
+    Decorator factory that registers a function to handle specific content types.
+ 
+    This decorator allows you to associate a handler function with content types
+    matching given regex patterns. When content with a matching Content-Type header
+    is encountered during crawling, the decorated function will be called to
+    process that content.
+ 
+    Args:
+        regexp_list (list): List of regex pattern strings that define which
+                           content types this function should handle. Patterns
+                           are compiled with case-insensitive and Unicode flags.
+ 
+    Returns:
+        function: A decorator function that registers the decorated function
+                 as a content type handler and adds it to the global
+                 content_type_functions list.
+ 
+    Note:
+        Similar to function_for_url but operates on HTTP Content-Type headers
+        rather than URL patterns. This allows content-based routing regardless
+        of the URL structure.
+    """
     def get_content_type_function(f):
         for regexp in regexp_list:
             content_type_functions.append((re.compile(regexp, flags=re.I | re.U), f))

@@ -954,6 +954,10 @@ content_type_database_regex = [
         r"^application/x-msaccess$",
         ]
 
+# Regex patterns to match office document content types in HTTP headers
+# Covers Microsoft Office formats (Word, Excel, PowerPoint), OpenDocument formats,
+# legacy and modern Office versions, macro-enabled documents, templates, and
+# various MIME type representations including shortened and fully-qualified names
 content_type_doc_regex = [
         r"^application/doc$",
         r"^application/xls$",

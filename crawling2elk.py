@@ -725,22 +725,22 @@ def get_links(soup, content_url, db):
 def function_for_content_type(regexp_list):
     """
     Decorator factory that registers a function to handle specific content types.
- 
+
     This decorator allows you to associate a handler function with content types
     matching given regex patterns. When content with a matching Content-Type header
     is encountered during crawling, the decorated function will be called to
     process that content.
- 
+
     Args:
         regexp_list (list): List of regex pattern strings that define which
                            content types this function should handle. Patterns
                            are compiled with case-insensitive and Unicode flags.
- 
+
     Returns:
         function: A decorator function that registers the decorated function
                  as a content type handler and adds it to the global
                  content_type_functions list.
- 
+
     Note:
         Similar to function_for_url but operates on HTTP Content-Type headers
         rather than URL patterns. This allows content-based routing regardless
@@ -754,6 +754,34 @@ def function_for_content_type(regexp_list):
 
 
 def get_directory_tree(url):
+    """
+    Generate a list of parent directory URLs from a given URL path.
+
+    This function creates URLs for all parent directories in the path hierarchy,
+    which is useful for directory traversal during web crawling. It builds URLs
+    by progressively removing path segments from the end, creating a breadcrumb
+    trail of parent directories.
+
+    Args:
+        url (str): The full URL to extract directory tree from
+                  (e.g., "https://example.com/path/to/file.html")
+
+    Returns:
+        list: List of parent directory URLs in descending order from immediate
+              parent to root directory
+
+    Process:
+        1. Extracts scheme and hostname (preserving port if present)
+        2. URL-decodes the path to handle encoded characters
+        3. Splits path into components using PurePosixPath
+        4. Iteratively removes trailing path segments to build parent URLs
+        5. Returns list of parent directory URLs
+
+    Note:
+        URLs are unquoted to handle percent-encoded paths correctly.
+        The function assumes POSIX-style paths with forward slashes.
+        Root directory and the original URL itself are not included in results.
+    """
     # Host will have scheme, hostname and port
     host = '://'.join(urlsplit(url)[:2])
     dtree = []
@@ -1575,7 +1603,7 @@ def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
             "random":       1
         }
     else:
-        method_weights=METHOD_WEIGHTS
+        method_weights = METHOD_WEIGHTS
 
     # Filter out methods with zero weight
     active_methods = {name: weight for name, weight in method_weights.items() if weight > 0}
@@ -1624,7 +1652,7 @@ def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
 def get_urls_from_web_search():
     urls = []
     search_for = random.choice(SEARCH_WORDS)
-    s=search(search_for, num_results=100, unique=True, safe=None)
+    s = search(search_for, num_results=100, unique=True, safe=None)
     for url in s:
         if not url:
             continue

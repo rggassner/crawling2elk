@@ -981,6 +981,10 @@ content_type_doc_regex = [
         r"^application/vnd\.openxmlformats-officedocument\.presentationml\.presentation$",
         ]
 
+# Regex patterns to match BitTorrent file content types in HTTP headers
+# Covers the standard BitTorrent MIME type and generic binary/octet-stream
+# types that may be used for torrent files, including various spellings
+# and representations of octet-stream
 content_type_torrent_regex = [
         r"^application/x-bittorrent$",
         r"^application/octetstream$",

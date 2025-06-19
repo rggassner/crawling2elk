@@ -791,6 +791,39 @@ def get_directory_tree(url):
 
 
 def insert_directory_tree(content_url, db):
+    """
+    Insert all parent directory URLs of a given URL into the crawling database.
+    
+    This function generates and stores all parent directory URLs for potential
+    crawling, enabling directory traversal and discovery of additional content
+    that might not be linked from the current page. It's useful for exploring
+    web server directory structures systematically.
+    
+    Args:
+        content_url (str): The source URL whose parent directories should be added
+                          (e.g., "https://example.com/docs/files/document.pdf")
+        db: Database connection object for storing URLs
+    
+    Process:
+        1. Extracts the parent host from the source URL
+        2. Generates all parent directory URLs using get_directory_tree()
+        3. Sanitizes each directory URL
+        4. Inserts each directory URL into the database as unvisited
+        5. Marks all entries with source "insert_directory_tree" for tracking
+    
+    Example:
+        For URL "https://site.com/blog/2023/posts/article.html", this will add:
+        - https://site.com/blog/2023/posts/
+        - https://site.com/blog/2023/
+        - https://site.com/blog/
+        
+    Note:
+        All inserted URLs are marked as unvisited and will be processed by the
+        crawler in subsequent iterations. The parent_host is preserved to
+        maintain crawling context and enable proper filtering. Empty strings
+        are used for words and content_type since directories haven't been
+        crawled yet.
+    """    
     parent_host = urlsplit(content_url)[1]
     for url in get_directory_tree(content_url):
         url = sanitize_url(url)

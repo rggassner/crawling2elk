@@ -7,11 +7,11 @@ INITIAL_URL = 'https://crawler-test.com/'
 # If you input urls using files, feed them here
 # Urls will be delete from files after crawling
 # and files will be deleted when empty
-INPUT_DIR = "input_url_files"
+INPUT_DIR = 'input_url_files'
 MAX_URLS_FROM_FILE = 100
 
 # Elasticsearch connection configuration
-ELASTICSEARCH_HOST = "127.0.0.1"
+ELASTICSEARCH_HOST = '127.0.0.1'
 ELASTICSEARCH_PORT = 9200
 ELASTICSEARCH_USER = 'elastic'
 ELASTICSEARCH_PASSWORD = 'yourpasswordhere'
@@ -105,7 +105,7 @@ HUNT_OPEN_DIRECTORIES = True
 # Selenium-wire don't do well with http, so we launch a https
 # localhost webservice that allows the content to be embeded and
 # crawled
-EMBED_PORT = "4443"
+EMBED_PORT = '4443'
 HTTPS_EMBED = 'https://localhost:'+EMBED_PORT+'/embed.html?url='
 
 # How many async workers for each instance type

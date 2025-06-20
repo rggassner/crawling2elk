@@ -4,7 +4,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 CONFIG="$DIR/../config.py"
 
 # Extract config values from config.py
-HOST=$(grep 'ELASTICSEARCH_HOST' "$CONFIG" | cut -d'"' -f2)
+HOST=$(grep 'ELASTICSEARCH_HOST' "$CONFIG" | grep -oE "'[^']+'" | tr -d "'")
 PORT=$(grep 'ELASTICSEARCH_PORT' "$CONFIG" | grep -o '[0-9]\+')
 USER=$(grep 'ELASTICSEARCH_USER' "$CONFIG" | cut -d"'" -f2)
 PASSWORD=$(grep 'ELASTICSEARCH_PASSWORD' "$CONFIG" | cut -d"'" -f2)

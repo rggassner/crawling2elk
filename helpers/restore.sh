@@ -14,23 +14,23 @@ INDEX=$(grep 'URLS_INDEX' "$CONFIG" | cut -d"'" -f2)
 RESTORE_INDEX="${INDEX}-restore"
 
 # Decompress mapping and data files
-xz -d --stdout "${INDEX}.mapping.json.xz" > "/tmp/${RESTORE_INDEX}.mapping.json"
-xz -d --stdout "${INDEX}.data.json.xz" > "/tmp/${RESTORE_INDEX}.data.json"
+xz -d --stdout "${INDEX}.mapping.json.xz" > "${RESTORE_INDEX}.mapping.json"
+xz -d --stdout "${INDEX}.data.json.xz" > "${RESTORE_INDEX}.data.json"
 
 # Restore mapping
 NODE_TLS_REJECT_UNAUTHORIZED=0 elasticdump \
-  --input="/tmp/${RESTORE_INDEX}.mapping.json" \
+  --input="${RESTORE_INDEX}.mapping.json" \
   --output="https://$USER:$PASSWORD@$HOST:$PORT/$RESTORE_INDEX" \
   --type=mapping
 
 # Restore data
 NODE_TLS_REJECT_UNAUTHORIZED=0 elasticdump \
-  --input="/tmp/${RESTORE_INDEX}.data.json" \
+  --input="${RESTORE_INDEX}.data.json" \
   --output="https://$USER:$PASSWORD@$HOST:$PORT/$RESTORE_INDEX" \
   --type=data
 
 # Cleanup temp files
-rm "/tmp/${RESTORE_INDEX}.mapping.json"
-rm "/tmp/${RESTORE_INDEX}.data.json"
+rm "${RESTORE_INDEX}.mapping.json"
+rm "${RESTORE_INDEX}.data.json"
 
 echo "Successfully restored to index: $RESTORE_INDEX"

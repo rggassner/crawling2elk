@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#! venv/bin/python3
 
 # Used only in the first run
 # INITIAL_URL = 'https://crawler-test.com/'
@@ -8,22 +8,60 @@ INITIAL_URL = 'https://crawler-test.com/'
 # Urls will be delete from files after crawling
 # and files will be deleted when empty
 INPUT_DIR = 'input_url_files'
+
 MAX_URLS_FROM_FILE = 100
 
+# -------------------------------------------
 # Elasticsearch connection configuration
+# -------------------------------------------
+
+# The hostname or IP address of the Elasticsearch server
 ELASTICSEARCH_HOST = '127.0.0.1'
+
+# The port Elasticsearch is listening on (typically 9200 for HTTP/HTTPS)
 ELASTICSEARCH_PORT = 9200
+
+# Username for basic authentication
 ELASTICSEARCH_USER = 'elastic'
+
+# Password for basic authentication
 ELASTICSEARCH_PASSWORD = 'yourpasswordhere'
+
+# Optional path to a CA certificate file for verifying the server's TLS cert
+# Set to None to skip custom CA verification (not recommended in production)
 ELASTICSEARCH_CA_CERT_PATH = None
+
+# Timeout in seconds for each request to Elasticsearch
+# Useful when dealing with long-running queries or slow networks
+ELASTICSEARCH_TIMEOUT = 300
+
+# Whether to retry the request if it times out
+# Helps improve resilience in the face of network hiccups or brief server issues
+ELASTICSEARCH_RETRY = True
+
+# Total number of retry attempts if a request fails or times out
+# Applies when ELASTICSEARCH_RETRY is True
+ELASTICSEARCH_RETRIES = 5
+
+# Whether to enable HTTP compression for request/response bodies
+# Can reduce bandwidth usage, but adds CPU cost — usually safe to enable
+ELASTICSEARCH_HTTP_COMPRESS = False
+
+# Whether to verify the server’s SSL certificate
+# Should be True in production; set to False only in dev or when using self-signed certs
+ELASTICSEARCH_VERIFY_CERTS = False
 
 # In order to avoid multiple workers on the same url
 ELASTICSEARCH_RANDOM_BUCKETS = 20
-MAX_ES_RETRIES = 10
-ES_RETRY_DELAY = 1
+
+# Name of the index where data will be stored
 URLS_INDEX = 'crawler'
 
-# Selenium config
+
+# -------------------------------------------
+# Selenium configuration
+# -------------------------------------------
+
 SELENIUM_WIDTH = 1920
 SELENIUM_HEIGHT = 1080
 USE_PROXY = False
@@ -33,11 +71,16 @@ PROXY_HOST = 'http://10.20.10.19:8123'
 # This configuration does not affect the other download configuration
 # below
 DIRECT_LINK_DOWNLOAD_FOLDER = '/dev/null'
+
 BLOCK_CSS = False
 
 # This makes selenium a bit faster if enabled but might make it detectable
 PERFORMANCE_OPTIMIZED = False
 FORCE_IMAGE_LOAD = False
+
+# -------------------------------------------
+# Crawler behavior configuration
+# -------------------------------------------
 
 # This option only makes sense to be activated when you have an external
 # script packing data to database, since all crawler data is already
@@ -105,7 +148,7 @@ HUNT_OPEN_DIRECTORIES = True
 # Selenium-wire don't do well with http, so we launch a https
 # localhost webservice that allows the content to be embeded and
 # crawled
-EMBED_PORT = '4443'
+EMBED_PORT = "4443"
 HTTPS_EMBED = 'https://localhost:'+EMBED_PORT+'/embed.html?url='
 
 # How many async workers for each instance type
@@ -142,7 +185,7 @@ MAX_WEBCONTENT_SIZE = 900000
 
 # search words will be randomly chosen, web searched and crawled
 SEARCH_WORDS = [
-    "Oni", "Tengu", "Kappa", "Kitsune", "Tanuki", "Yuki-onna", "Rokurokubi",
+    "Conan", "Barbarian", "Cimmeria", "Hyborian Age", "Robert E. Howard",
 ]
 
 # be_greedy = True - Save urls to database that might not work,
@@ -152,8 +195,8 @@ BE_GREEDY = False
 # Do not crawl these domains.
 HOST_REGEX_BLOCK_LIST = [
     r'localhost:4443$',
+    r'(^|\.)google$',
     r'(^|\.)google\.com$',
-    r'(^|\.)gstatic\.com$',
 ]
 
 # Do not crawl urls that match any of these regexes

@@ -793,37 +793,37 @@ def get_directory_tree(url):
 def insert_directory_tree(content_url, db):
     """
     Insert all parent directory URLs of a given URL into the crawling database.
-    
+
     This function generates and stores all parent directory URLs for potential
     crawling, enabling directory traversal and discovery of additional content
     that might not be linked from the current page. It's useful for exploring
     web server directory structures systematically.
-    
+
     Args:
         content_url (str): The source URL whose parent directories should be added
                           (e.g., "https://example.com/docs/files/document.pdf")
         db: Database connection object for storing URLs
-    
+
     Process:
         1. Extracts the parent host from the source URL
         2. Generates all parent directory URLs using get_directory_tree()
         3. Sanitizes each directory URL
         4. Inserts each directory URL into the database as unvisited
         5. Marks all entries with source "insert_directory_tree" for tracking
-    
+
     Example:
         For URL "https://site.com/blog/2023/posts/article.html", this will add:
         - https://site.com/blog/2023/posts/
         - https://site.com/blog/2023/
         - https://site.com/blog/
-        
+
     Note:
         All inserted URLs are marked as unvisited and will be processed by the
         crawler in subsequent iterations. The parent_host is preserved to
         maintain crawling context and enable proper filtering. Empty strings
         are used for words and content_type since directories haven't been
         crawled yet.
-    """    
+    """
     parent_host = urlsplit(content_url)[1]
     for url in get_directory_tree(content_url):
         url = sanitize_url(url)
@@ -838,6 +838,46 @@ def insert_directory_tree(content_url, db):
 
 @function_for_content_type(content_type_html_regex)
 def content_type_download(args):
+    """
+    Process HTML content by extracting links and storing page data in the database.
+
+    This function handles HTML pages discovered during crawling by parsing the content,
+    extracting all hyperlinks for further crawling, and storing various representations
+    of the page content based on configuration flags. It includes robust error handling
+    for parsing failures and encoding issues.
+
+    Args:
+        args (dict): Dictionary containing:
+            - 'content' (str/bytes): HTML content to process
+            - 'url' (str): URL of the page being processed
+            - 'content_type' (str): HTTP Content-Type header value
+            - 'parent_host' (str): Host of the referring page
+            - 'db': Database connection object
+
+    Returns:
+        bool: True if processing succeeded, False if parsing failed
+
+    Process:
+        1. Decodes content from bytes to string if necessary (UTF-8 with error replacement)
+        2. Parses HTML using BeautifulSoup with html.parser
+        3. Extracts all hyperlinks using get_links() for continued crawling
+        4. Conditionally extracts content based on configuration flags:
+           - EXTRACT_WORDS: Extracts text words from the page
+           - EXTRACT_RAW_WEBCONTENT: Stores raw HTML (truncated to MAX_WEBCONTENT_SIZE)
+           - EXTRACT_MIN_WEBCONTENT: Stores minimal content representation
+        5. Detects if page is an open directory listing
+        6. Stores all extracted data in the database
+
+    Error Handling:
+        - UnboundLocalError: Handles variable scope issues
+        - ParserRejectedMarkup: Handles malformed HTML that BeautifulSoup cannot parse
+        - Both exceptions result in database entry with empty content fields
+
+    Note:
+        Content is truncated to MAX_WEBCONTENT_SIZE to prevent database bloat.
+        All pages are marked as visited=True after processing. The function
+        serves as the main HTML content processor in the crawling pipeline.
+    """
     try:
         content = args['content']
         # Ensure content is decoded properly
@@ -1698,171 +1738,57 @@ def get_urls_from_web_search():
 
 def get_least_covered_random_hosts(db, size=100):
     """Returns 'size' hosts from a random bucket with the fewest unvisited URLs, and one random URL per host."""
-    for attempt in range(MAX_ES_RETRIES):
-        random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
-        print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
+    random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
+    print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
 
-        # Step 1: Get hosts with fewest unvisited URLs
-        agg_query = {
-            "size": 0,
-            "query": {
-                "bool": {
-                    "must": [
-                        {"term": {"random_bucket": random_bucket}},
-                        {
-                            "bool": {
-                                "should": [
-                                    {"term": {"visited": False}},
-                                    {"bool": {"must_not": {"exists": {"field": "visited"}}}}
-                                ],
-                                "minimum_should_match": 1
-                            }
-                        }
-                    ]
-                }
-            },
-            "aggs": {
-                "hosts": {
-                    "terms": {
-                        "field": "host",
-                        "size": size,
-                        "order": {"_count": "asc"}  # Fewest unvisited URLs first
-                    }
-                }
-            }
-        }
-
-        agg_response = db.con.search(index=URLS_INDEX, body=agg_query)
-        buckets = agg_response.get("aggregations", {}).get("hosts", {}).get("buckets", [])
-        hosts = [bucket["key"] for bucket in buckets]
-        for bucket in buckets:
-            print('    \033[35m{}\t-{}-\033[0m'.format(bucket['doc_count'],bucket['key']))
-
-        if not hosts:
-            continue
-
-        # Step 2: For each host, get one random unvisited URL
-        results = []
-        for host in hosts:
-            query = {
-                "size": 1,
-                "query": {
-                    "bool": {
-                        "must": [
-                            {"term": {"host": host}},
-                            {"term": {"random_bucket": random_bucket}},
-                            {
-                                "bool": {
-                                    "should": [
-                                        {"term": {"visited": False}},
-                                        {"bool": {"must_not": {"exists": {"field": "visited"}}}}
-                                    ],
-                                    "minimum_should_match": 1
-                                }
-                            }
-                        ]
-                    }
-                },
-                "sort": [
+    # Step 1: Get hosts with fewest unvisited URLs
+    agg_query = {
+        "size": 0,
+        "query": {
+            "bool": {
+                "must": [
+                    {"term": {"random_bucket": random_bucket}},
                     {
-                        "_script": {
-                            "type": "number",
-                            "script": {
-                                "lang": "painless",
-                                "source": "Math.random()"
-                            },
-                            "order": "asc"
+                        "bool": {
+                            "should": [
+                                {"term": {"visited": False}},
+                                {"bool": {"must_not": {"exists": {"field": "visited"}}}}
+                            ],
+                            "minimum_should_match": 1
                         }
                     }
                 ]
             }
-
-            response = db.con.search(index=URLS_INDEX, body=query)
-            hits = response.get("hits", {}).get("hits", [])
-            if hits:
-                results.append({
-                    "url": hits[0]["_source"]["url"],
-                    "host": host
-                })
-
-        if results:
-            random.shuffle(results)
-            return results
-
-    return []
-
-
-def get_urls_from_least_visited_hosts(db, size=100):
-    """Fetch 1 truly unvisited URL per host from a random bucket."""
-    for attempt in range(MAX_ES_RETRIES):
-        random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
-        print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
-
-        query_body = {
-            "size": size,
-            "query": {
-                "bool": {
-                    "must": [
-                        {"term": {"random_bucket": random_bucket}},
-                        {
-                            "bool": {
-                                "should": [
-                                    {"term": {"visited": False}},
-                                    {"bool": {"must_not": {"exists": {"field": "visited"}}}}
-                                ],
-                                "minimum_should_match": 1
-                            }
-                        }
-                    ]
+        },
+        "aggs": {
+            "hosts": {
+                "terms": {
+                    "field": "host",
+                    "size": size,
+                    "order": {"_count": "asc"}  # Fewest unvisited URLs first
                 }
-            },
-            "collapse": {
-                "field": "host",
-                "inner_hits": {
-                    "name": "least_visited_hit",
-                    "size": 1,
-                    "sort": [
-                        {
-                            "_script": {
-                                "type": "number",
-                                "script": {
-                                    "lang": "painless",
-                                    "source": "Math.random()"
-                                },
-                                "order": "asc"
-                            }
-                        }
-                    ]
-                }
-            },
-            "_source": ["host"]
+            }
         }
+    }
 
-        response = db.con.search(index=URLS_INDEX, body=query_body)
-        results = response.get('hits', {}).get('hits', [])
-        for result in results:
-            print('    \033[35m{} \t {}\033[0m'.format(result['_score'],result['_source']['host']))
-        if results:
-            random.shuffle(results)
-            return [{
-                "url": r["inner_hits"]["least_visited_hit"]["hits"]["hits"][0]["_source"]["url"],
-                "host": r["_source"]["host"]
-            } for r in results]
+    agg_response = db.con.search(index=URLS_INDEX, body=agg_query)
+    buckets = agg_response.get("aggregations", {}).get("hosts", {}).get("buckets", [])
+    hosts = [bucket["key"] for bucket in buckets]
+    for bucket in buckets:
+        print('    \033[35m{}\t-{}-\033[0m'.format(bucket['doc_count'], bucket['key']))
 
-    return []
+    if not hosts:
+        return []
 
-
-def get_oldest_unvisited_urls_from_bucket(db, size=100):
-    """Get the oldest unvisited URLs from a random bucket using created_at timestamp."""
-    for attempt in range(MAX_ES_RETRIES):
-        random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
-        print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
-
-        query_body = {
-            "size": size,
+    # Step 2: For each host, get one random unvisited URL
+    results = []
+    for host in hosts:
+        query = {
+            "size": 1,
             "query": {
                 "bool": {
                     "must": [
+                        {"term": {"host": host}},
                         {"term": {"random_bucket": random_bucket}},
                         {
                             "bool": {
@@ -1877,137 +1803,246 @@ def get_oldest_unvisited_urls_from_bucket(db, size=100):
                 }
             },
             "sort": [
-                { "created_at": { "order": "asc" } }
+                {
+                    "_script": {
+                        "type": "number",
+                        "script": {
+                            "lang": "painless",
+                            "source": "Math.random()"
+                        },
+                        "order": "asc"
+                    }
+                }
             ]
         }
 
-        response = db.con.search(index=URLS_INDEX, body=query_body)
-        hits = response.get('hits', {}).get('hits', [])
+        response = db.con.search(index=URLS_INDEX, body=query)
+        hits = response.get("hits", {}).get("hits", [])
         if hits:
-            for hit in hits:
-                print(f'    \033[35m{hit["_source"]["url"]}\033[0m')
-            random.shuffle(hits)  # Shuffle the list in-place
-            return [{
-                "url": hit["_source"]["url"],
-                "host": hit["_source"]["host"]
-            } for hit in hits]
+            results.append({
+                "url": hits[0]["_source"]["url"],
+                "host": host
+            })
+
+    if results:
+        random.shuffle(results)
+        return results
+
+    return []
+
+
+def get_urls_from_least_visited_hosts(db, size=100):
+    """Fetch 1 truly unvisited URL per host from a random bucket."""
+    random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
+    print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
+
+    query_body = {
+        "size": size,
+        "query": {
+            "bool": {
+                "must": [
+                    {"term": {"random_bucket": random_bucket}},
+                    {
+                        "bool": {
+                            "should": [
+                                {"term": {"visited": False}},
+                                {"bool": {"must_not": {"exists": {"field": "visited"}}}}
+                            ],
+                            "minimum_should_match": 1
+                        }
+                    }
+                ]
+            }
+        },
+        "collapse": {
+            "field": "host",
+            "inner_hits": {
+                "name": "least_visited_hit",
+                "size": 1,
+                "sort": [
+                    {
+                        "_script": {
+                            "type": "number",
+                            "script": {
+                                "lang": "painless",
+                                "source": "Math.random()"
+                            },
+                            "order": "asc"
+                        }
+                    }
+                ]
+            }
+        },
+        "_source": ["host"]
+    }
+
+    response = db.con.search(index=URLS_INDEX, body=query_body)
+    results = response.get('hits', {}).get('hits', [])
+    for result in results:
+        print('    \033[35m{} \t {}\033[0m'.format(result['_score'],result['_source']['host']))
+    if results:
+        random.shuffle(results)
+        return [{
+            "url": r["inner_hits"]["least_visited_hit"]["hits"]["hits"][0]["_source"]["url"],
+            "host": r["_source"]["host"]
+        } for r in results]
+
+    return []
+
+
+def get_oldest_unvisited_urls_from_bucket(db, size=100):
+    """Get the oldest unvisited URLs from a random bucket using created_at timestamp."""
+    random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
+    print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
+
+    query_body = {
+        "size": size,
+        "query": {
+            "bool": {
+                "must": [
+                    {"term": {"random_bucket": random_bucket}},
+                    {
+                        "bool": {
+                            "should": [
+                                {"term": {"visited": False}},
+                                {"bool": {"must_not": {"exists": {"field": "visited"}}}}
+                            ],
+                            "minimum_should_match": 1
+                        }
+                    }
+                ]
+            }
+        },
+        "sort": [
+            { "created_at": { "order": "asc" } }
+        ]
+    }
+
+    response = db.con.search(index=URLS_INDEX, body=query_body)
+    hits = response.get('hits', {}).get('hits', [])
+    if hits:
+        for hit in hits:
+            print(f'    \033[35m{hit["_source"]["url"]}\033[0m')
+        random.shuffle(hits)  # Shuffle the list in-place
+        return [{
+            "url": hit["_source"]["url"],
+            "host": hit["_source"]["host"]
+        } for hit in hits]
 
     return []
 
 
 def get_urls_by_random_bucket_and_host_prefix(db, size=100):
     """Get 1 unvisited URL per host from a random bucket where host starts with a random character."""
-    for attempt in range(MAX_ES_RETRIES):
-        random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
-        print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
-        prefix_char = random.choice(string.ascii_lowercase + string.digits)
+    random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
+    print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
+    prefix_char = random.choice(string.ascii_lowercase + string.digits)
 
-        query_body = {
-            "size": size,
-            "query": {
-                "bool": {
-                    "must": [
-                        {"term": {"random_bucket": random_bucket}},
-                        {"prefix": {"host": prefix_char}},
-                        {
-                            "bool": {
-                                "should": [
-                                    {"term": {"visited": False}},
-                                    {"bool": {"must_not": {"exists": {"field": "visited"}}}}
-                                ],
-                                "minimum_should_match": 1
-                            }
+    query_body = {
+        "size": size,
+        "query": {
+            "bool": {
+                "must": [
+                    {"term": {"random_bucket": random_bucket}},
+                    {"prefix": {"host": prefix_char}},
+                    {
+                        "bool": {
+                            "should": [
+                                {"term": {"visited": False}},
+                                {"bool": {"must_not": {"exists": {"field": "visited"}}}}
+                            ],
+                            "minimum_should_match": 1
                         }
-                    ]
-                }
-            },
-            "collapse": {
-                "field": "host",
-                "inner_hits": {
-                    "name": "random_unvisited_url",
-                    "size": 1,
-                    "sort": [
-                        {
-                            "_script": {
-                                "type": "number",
-                                "script": {
-                                    "lang": "painless",
-                                    "source": "Math.random()"
-                                },
-                                "order": "asc"
-                            }
+                    }
+                ]
+            }
+        },
+        "collapse": {
+            "field": "host",
+            "inner_hits": {
+                "name": "random_unvisited_url",
+                "size": 1,
+                "sort": [
+                    {
+                        "_script": {
+                            "type": "number",
+                            "script": {
+                                "lang": "painless",
+                                "source": "Math.random()"
+                            },
+                            "order": "asc"
                         }
-                    ]
-                }
-            },
-            "_source": ["host"]
-        }
-        response = db.con.search(index=URLS_INDEX, body=query_body)
-        results = response.get('hits', {}).get('hits', [])
-        if results:
-            urls = [{
-                "url": r["inner_hits"]["random_unvisited_url"]["hits"]["hits"][0]["_source"]["url"],
-                "host": r["_source"]["host"]
-            } for r in results]
-            for url in urls:
-                print('    \033[35m{}\033[0m'.format(url['url']))
-            random.shuffle(urls)
-            return urls
+                    }
+                ]
+            }
+        },
+        "_source": ["host"]
+    }
+    response = db.con.search(index=URLS_INDEX, body=query_body)
+    results = response.get('hits', {}).get('hits', [])
+    if results:
+        urls = [{
+            "url": r["inner_hits"]["random_unvisited_url"]["hits"]["hits"][0]["_source"]["url"],
+            "host": r["_source"]["host"]
+        } for r in results]
+        for url in urls:
+            print('    \033[35m{}\033[0m'.format(url['url']))
+        random.shuffle(urls)
+        return urls
     return []
 
 
 def get_random_host_domains(db, size=100):
-    for attempt in range(MAX_ES_RETRIES):
-        random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
-        print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
-        query_body = {
-            "size": size,
-            "query": {
-                "bool": {
-                    "must": [
-                        {"term": {"random_bucket": random_bucket}}
-                    ],
-                    "should": [
-                        {"term": {"visited": False}},
-                        {"bool": {"must_not": {"exists": {"field": "visited"}}}}
-                    ],
-                    "minimum_should_match": 1
-                }
-            },
-            "collapse": {
-                "field": "host",
-                "inner_hits": {
-                    "name": "random_hit",
-                    "size": 1,
-                    "sort": [
-                        {
-                            "_script": {
-                                "type": "number",
-                                "script": {
-                                    "lang": "painless",
-                                    "source": "Math.random()"
-                                },
-                                "order": "asc"
-                            }
+    random_bucket = random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
+    print(f'    Selected bucket: \033[33m{random_bucket}\033[0m')
+    query_body = {
+        "size": size,
+        "query": {
+            "bool": {
+                "must": [
+                    {"term": {"random_bucket": random_bucket}}
+                ],
+                "should": [
+                    {"term": {"visited": False}},
+                    {"bool": {"must_not": {"exists": {"field": "visited"}}}}
+                ],
+                "minimum_should_match": 1
+            }
+        },
+        "collapse": {
+            "field": "host",
+            "inner_hits": {
+                "name": "random_hit",
+                "size": 1,
+                "sort": [
+                    {
+                        "_script": {
+                            "type": "number",
+                            "script": {
+                                "lang": "painless",
+                                "source": "Math.random()"
+                            },
+                            "order": "asc"
                         }
-                    ]
-                }
+                    }
+                ]
             }
         }
+    }
 
-        response = db.con.search(index=URLS_INDEX, body=query_body)
-        results = response.get('hits', {}).get('hits', [])
+    response = db.con.search(index=URLS_INDEX, body=query_body)
+    results = response.get('hits', {}).get('hits', [])
 
-        if results:
-            random.shuffle(results)
-            result = [{
-                "url": r["inner_hits"]["random_hit"]["hits"]["hits"][0]["_source"]["url"],
-                "host": r["_source"]["host"]
-            } for r in results]
-            for url in result:
-                print('    \033[35m{}\033[0m'.format(url['url']))
-            return result
-        return []
+    if results:
+        random.shuffle(results)
+        result = [{
+            "url": r["inner_hits"]["random_hit"]["hits"]["hits"][0]["_source"]["url"],
+            "host": r["_source"]["host"]
+        } for r in results]
+        for url in result:
+            print('    \033[35m{}\033[0m'.format(url['url']))
+        return result
+    return []
 
 
 def fast_extension_crawler(url, extension, content_type_patterns, db):

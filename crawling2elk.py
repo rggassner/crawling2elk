@@ -35,23 +35,14 @@ from urllib.parse import unquote, urljoin, urlparse, urlsplit
 from urllib3.exceptions import InsecureRequestWarning
 
 
-def load_nsfw_model():
-    """
-    Conditionally loads the OpenNSFW2 model for image classification.
-
-    This function checks whether NSFW content categorization is enabled via the
-    `CATEGORIZE_NSFW` flag. If enabled, it imports the `opennsfw2` module and
-    initializes the pre-trained NSFW classification model using `make_open_nsfw_model()`.
-
-    Returns:
-        model (keras.Model or None): The loaded NSFW classification model if enabled,
-        otherwise None.
-    """
-    if CATEGORIZE_NSFW:
-        import opennsfw2 as n2
-        return n2.make_open_nsfw_model()
-    return None
-
+"""
+Conditionally loads the OpenNSFW2 model for image classification.
+This function checks whether NSFW content categorization is enabled via the
+`CATEGORIZE_NSFW` flag. If enabled, it imports the `opennsfw2` module and
+initializes the pre-trained NSFW classification model using `make_open_nsfw_model()`.
+"""
+if CATEGORIZE_NSFW:
+    import opennsfw2 as n2
 
 absl.logging.set_verbosity('error')
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)

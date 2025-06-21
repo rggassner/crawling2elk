@@ -28,9 +28,13 @@ class DatabaseConnection:
     def __init__(self):
         # Prepare configuration for Elasticsearch connection
         es_config = {
-            "hosts": [f"https://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}"],  # Host and port of Elasticsearch cluster
-            "basic_auth": (ELASTICSEARCH_USER, ELASTICSEARCH_PASSWORD),       # Basic authentication credentials
-            "verify_certs": False,  # Disable SSL certificate verification (not recommended for production)
+            "hosts": [f"https://{ELASTICSEARCH_HOST}:{ELASTICSEARCH_PORT}"],
+            "basic_auth": (ELASTICSEARCH_USER, ELASTICSEARCH_PASSWORD),
+            "verify_certs": ELASTICSEARCH_VERIFY_CERTS,
+            "request_timeout": ELASTICSEARCH_TIMEOUT,
+            "retry_on_timeout": ELASTICSEARCH_RETRY,
+            "max_retries": ELASTICSEARCH_RETRIES,
+            "http_compress": ELASTICSEARCH_HTTP_COMPRESS
         }
 
         # If a custom CA certificate path is provided, add it to the config for certificate verification
@@ -992,6 +996,10 @@ content_type_torrent_regex = [
         r"^application/x-octet-stream$",
         ]
 
+# Regex patterns to match font file content types in HTTP headers
+# Covers modern web fonts (WOFF, WOFF2), traditional fonts (TTF, OTF),
+# legacy formats (EOT), and various non-standard MIME type representations
+# including x-prefixed variants and misclassified types (e.g., image/otf)
 content_type_font_regex = [
         r"^woff$",
         r"^woff2$",

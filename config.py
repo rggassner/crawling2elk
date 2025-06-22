@@ -16,7 +16,7 @@ MAX_URLS_FROM_FILE = 100
 # -------------------------------------------
 
 # The hostname or IP address of the Elasticsearch server
-ELASTICSEARCH_HOST = '127.0.0.1'
+ELASTICSEARCH_HOST = '192.168.1.1'
 
 # The port Elasticsearch is listening on (typically 9200 for HTTP/HTTPS)
 ELASTICSEARCH_PORT = 9200
@@ -25,7 +25,7 @@ ELASTICSEARCH_PORT = 9200
 ELASTICSEARCH_USER = 'elastic'
 
 # Password for basic authentication
-ELASTICSEARCH_PASSWORD = 'yourpasswordhere'
+ELASTICSEARCH_PASSWORD = 'yourpassword'
 
 # Optional path to a CA certificate file for verifying the server's TLS cert
 # Set to None to skip custom CA verification (not recommended in production)
@@ -85,7 +85,13 @@ FORCE_IMAGE_LOAD = False
 # This option only makes sense to be activated when you have an external
 # script packing data to database, since all crawler data is already
 # filtered while urls are entering.
-REMOVE_INVALID_URLS = True
+REMOVE_INVALID_URLS = False
+
+# If urls that are blocked based on host should be removed from the database.
+REMOVE_BLOCKED_HOSTS = False
+
+# If urls that are blocked based on path should be deleted from the database.
+REMOVE_BLOCKED_URLS = False
 
 # How long will it  wait until consider the url is not responding
 # This will deal with pages asking for basic authentication, and
@@ -94,7 +100,7 @@ MAX_DOWNLOAD_TIME = 120
 
 # How many iterations should the python script runs. This does not
 # apply to the wrapper, that makes it run continuously.
-ITERATIONS = 10
+ITERATIONS = 100
 
 # Files won't be longer than MAX_FILENAME_LENGTH in disk. If it happens
 # name will be trunkated, but original extensions are kept.
@@ -153,6 +159,7 @@ HTTPS_EMBED = 'https://localhost:'+EMBED_PORT+'/embed.html?url='
 
 # How many async workers for each instance type
 MAX_FAST_WORKERS = 2
+
 # When working with only one worker and if you want to avoid WAFs
 FAST_RANDOM_MIN_WAIT = 0
 FAST_RANDOM_MAX_WAIT = 0
@@ -164,6 +171,7 @@ EXTRACT_WORDS = True
 WORDS_REMOVE_SPECIAL_CHARS = True
 WORDS_TO_LOWER = True
 WORDS_MIN_LEN = 3
+
 # WORDS_MAX_LEN * WORDS_MAX_WORDS should be under 1 million
 # for a default elastic search env
 WORDS_MAX_LEN = 40

@@ -1042,6 +1042,10 @@ content_type_font_regex = [
         r"^font/woff2\|application/octet-stream\|font/x-woff2$",
         ]
 
+# Regex patterns to match video file content types in HTTP headers
+# Covers modern video formats (MP4, WebM, OGG), legacy formats (AVI, WMV),
+# mobile formats (3GPP), streaming formats (M2TS, F4V), and non-standard
+# MIME types including application/ prefixed variants for video content
 content_type_video_regex = [
         r"^video/mp4$",
         r"^video/ogg$",

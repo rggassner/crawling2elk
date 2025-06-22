@@ -37,12 +37,14 @@ from urllib3.exceptions import InsecureRequestWarning
 
 """
 Conditionally loads the OpenNSFW2 model for image classification.
+
 This function checks whether NSFW content categorization is enabled via the
 `CATEGORIZE_NSFW` flag. If enabled, it imports the `opennsfw2` module and
 initializes the pre-trained NSFW classification model using `make_open_nsfw_model()`.
 """
 if CATEGORIZE_NSFW:
     import opennsfw2 as n2
+    model = n2.make_open_nsfw_model()
 
 absl.logging.set_verbosity('error')
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
@@ -934,6 +936,39 @@ def content_type_download(args):
 
 @function_for_content_type(content_type_plain_text_regex)
 def content_type_plain_text(args):
+    """
+    Process plain text content by extracting words and storing in the database.
+
+    This function handles plain text files discovered during crawling by optionally
+    extracting words for indexing and storing the processed information in the
+    database. It's designed for content types like text/plain, text/css, etc.
+
+    Args:
+        args (dict): Dictionary containing:
+            - 'content' (str): Plain text content to process
+            - 'url' (str): URL of the text file being processed
+            - 'content_type' (str): HTTP Content-Type header value
+            - 'parent_host' (str): Host of the referring page
+            - 'db': Database connection object
+
+    Returns:
+        bool: Always returns True indicating successful processing
+
+    Process:
+        1. Conditionally extracts words from text content if EXTRACT_WORDS is enabled
+        2. Stores the URL and metadata in the database
+        3. Marks the content as visited and not an open directory
+
+    Configuration:
+        - EXTRACT_WORDS: If True, extracts and stores searchable words from content
+        - If False, words field remains empty to save storage space
+
+    Note:
+        Unlike HTML processing, this function doesn't extract links since plain
+        text files typically don't contain hyperlinks. The content is processed
+        as-is without parsing or markup interpretation. All entries are marked
+        with source 'content_type_plain_text_regex' for tracking purposes.
+    """
     words = ''
     if EXTRACT_WORDS:
         words = get_words(args['content'])
@@ -1870,7 +1905,7 @@ def get_urls_from_least_visited_hosts(db, size=100):
     response = db.con.search(index=URLS_INDEX, body=query_body)
     results = response.get('hits', {}).get('hits', [])
     for result in results:
-        print('    \033[35m{} \t {}\033[0m'.format(result['_score'],result['_source']['host']))
+        print('    \033[35m{} \t {}\033[0m'.format(result['_score'], result['_source']['host']))
     if results:
         random.shuffle(results)
         return [{
@@ -2357,10 +2392,12 @@ def main():
         import threading
         threading.Thread(target=start_https_server, daemon=True).start()
         time.sleep(1)  # Give HTTPS server a head start
-        print("Instance 1: Removing urls from hosts that are blocklisted.")
-        remove_blocked_hosts_from_es_db(db)
-        print("Instance 1: Removing path blocklisted urls.")
-        remove_blocked_urls_from_es_db(db)
+        if REMOVE_BLOCKED_HOSTS:
+            print("Instance 1: Removing urls from hosts that are blocklisted.")
+            remove_blocked_hosts_from_es_db(db)
+        if REMOVE_BLOCKED_URLS:
+            print("Instance 1: Removing path blocklisted urls.")
+            remove_blocked_urls_from_es_db(db)
         if REMOVE_INVALID_URLS:
             print("Instance 1: Deleting invalid urls.")
             remove_invalid_urls(db)

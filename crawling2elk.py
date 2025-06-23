@@ -986,6 +986,48 @@ def content_type_plain_text(args):
 
 @function_for_content_type(content_type_image_regex)
 def content_type_images(args):
+    """
+    Processes image content detected by content type and performs optional actions
+    such as saving, categorizing as NSFW, and recording metadata in the database.
+
+    This function is triggered for URLs whose content type matches image patterns.
+    It attempts to load the image, compute its resolution, and—depending on the
+    configuration flags—save the image and classify it using an NSFW detection model.
+
+    Parameters:
+        args (dict): A dictionary with the following keys:
+            - 'content' (bytes): The raw image content.
+            - 'url' (str): The URL of the image.
+            - 'content_type' (str): MIME type of the image.
+            - 'parent_host' (str): The domain the image was found on.
+            - 'db' (sqlite3.Connection): Database connection used for inserting metadata.
+
+    Returns:
+        bool:
+            - True if the image was successfully processed and metadata inserted.
+            - False if the image could not be opened, was corrupted, or raised known exceptions.
+
+    Behavior:
+        - If the image can't be opened, logs the attempt and returns False.
+        - Converts certain image modes (e.g., CMYK or palette with transparency) to RGB/RGBA.
+        - Saves the image if DOWNLOAD_ALL_IMAGES is set.
+        - If CATEGORIZE_NSFW is enabled and the image resolution is above MIN_NSFW_RES:
+            - Runs NSFW classification and logs the NSFW score.
+            - Saves the image to SFW_FOLDER or NSFW_FOLDER based on probability thresholds.
+        - Always logs the URL and image metadata (resolution, content type) to the database.
+
+    Exceptions Handled:
+        - PIL.UnidentifiedImageError: Unreadable or unsupported image format.
+        - PIL.Image.DecompressionBombError: Exception for extremely large images.
+        - OSError: Any general OS-related error while processing the image.
+
+    Global Dependencies:
+        - `model`: NSFW detection model used when CATEGORIZE_NSFW is enabled.
+        - `IMAGES_FOLDER`, `NSFW_FOLDER`, `SFW_FOLDER`: Directories for saving images.
+        - `CATEGORIZE_NSFW`, `DOWNLOAD_ALL_IMAGES`, `DOWNLOAD_NSFW`, `DOWNLOAD_SFW`:
+          Configuration flags controlling feature behavior.
+        - `MIN_NSFW_RES`, `NSFW_MIN_PROBABILITY`: Thresholds for classification logic.
+    """
     global model
     npixels = 0
     if CATEGORIZE_NSFW or DOWNLOAD_ALL_IMAGES:
@@ -1940,7 +1982,7 @@ def get_oldest_unvisited_urls_from_bucket(db, size=100):
             }
         },
         "sort": [
-            { "created_at": { "order": "asc" } }
+            {"created_at": {"order": "asc"}}
         ]
     }
 
@@ -2117,8 +2159,8 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
                     (function.__name__ == "content_type_databases" and DOWNLOAD_DATABASES) or
                     (function.__name__ == "content_type_docs" and DOWNLOAD_DOCS) or
                     (function.__name__ == "content_type_fonts" and DOWNLOAD_FONTS) or
-                    (function.__name__ == "content_type_images" and DOWNLOAD_NSFW) or 
-                    (function.__name__ == "content_type_images" and DOWNLOAD_SFW) or 
+                    (function.__name__ == "content_type_images" and DOWNLOAD_NSFW) or
+                    (function.__name__ == "content_type_images" and DOWNLOAD_SFW) or
                     (function.__name__ == "content_type_images" and DOWNLOAD_ALL_IMAGES) or
                     (function.__name__ == "content_type_midis" and DOWNLOAD_MIDIS) or
                     (function.__name__ == "content_type_pdfs" and DOWNLOAD_PDFS) or
@@ -2151,7 +2193,7 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
 
     except Exception as e:
         print(f"[FAST CRAWLER] Error processing {url}: {e}")
-    time.sleep(random.uniform(FAST_RANDOM_MIN_WAIT,FAST_RANDOM_MAX_WAIT))
+    time.sleep(random.uniform(FAST_RANDOM_MIN_WAIT, FAST_RANDOM_MAX_WAIT))
 
 
 def run_fast_extension_pass(db, max_workers=MAX_FAST_WORKERS):

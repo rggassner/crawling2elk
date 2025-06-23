@@ -1078,6 +1078,11 @@ content_type_video_regex = [
         r"^application/vnd\.adobe\.flash\.movie$",
         ]
 
+# Regex patterns to match plain text and text-based file content types in HTTP headers
+# Covers standard text formats (plain, CSV, XML, JSON), programming languages
+# (JavaScript, Go, Perl, C), markup formats (RTF, YAML), subtitle formats (SRT, VTT),
+# system files (shell scripts, logs, diffs), and various non-standard MIME type
+# representations that should be processed as readable text content
 content_type_plain_text_regex = [
         r"^\.js$",
         r"^text/js$",

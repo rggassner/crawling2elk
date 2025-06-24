@@ -1115,6 +1115,33 @@ def content_type_images(args):
 
 @function_for_content_type(content_type_midi_regex)
 def content_type_midis(args):
+    """
+    Handles MIDI files detected by content type during crawling.
+
+    This function is triggered for URLs whose content type matches a MIDI-specific regex.
+    It performs the following actions:
+
+    1. Inserts the URL into the database if it's not already present.
+    2. If MIDI downloading is enabled (controlled by `DOWNLOAD_MIDIS`), it:
+        - Sanitizes the URL filename to ensure it's safe for the filesystem.
+        - Truncates the filename if it's too long, appending a SHA-256 hash for uniqueness.
+        - Writes the MIDI content to a local file inside the `MIDIS_FOLDER` directory.
+
+    Args:
+        args (dict): A dictionary containing the following keys:
+            - 'url' (str): The URL of the MIDI file.
+            - 'content_type' (str): The MIME type of the content.
+            - 'content' (bytes): The raw content of the MIDI file.
+            - 'parent_host' (str): The parent host from which the URL was discovered.
+            - 'db' (sqlite3.Connection or similar): Database connection object.
+
+    Returns:
+        bool: Always returns True to signal successful processing.
+
+    Notes:
+        - If `DOWNLOAD_MIDIS` is False, the function skips the download step.
+        - Filenames are made safe and unique using regex cleanup and SHA-256 hashing.
+    """
     db_insert_if_new_url(
         url=args['url'],
         content_type=args['content_type'],
@@ -2251,13 +2278,13 @@ def run_fast_extension_pass(db, max_workers=MAX_FAST_WORKERS):
 
 
 def remove_invalid_urls(db):
-    """ 
-    Deletes documents from Elasticsearch where the 'url' field is invalid 
+    """
+    Deletes documents from Elasticsearch where the 'url' field is invalid
     or missing a scheme. Re-inserts sanitized URLs if they change.
     """
     deleted = 0
     query = {"query": {"match_all": {}}}
-    
+
     for doc in helpers.scan(db.es, index=URLS_INDEX, query=query):
         url = doc['_source'].get('url')
         if not url:
@@ -2266,7 +2293,7 @@ def remove_invalid_urls(db):
         parsed = urlparse(url)
         pre_url = url
         url = sanitize_url(url)
-        
+
         # Remove if URL changed after sanitization
         if pre_url != url:
             print(f"Deleted sanitized URL: -{pre_url}- inserting -{url}-")
@@ -2274,7 +2301,7 @@ def remove_invalid_urls(db):
             db.es.delete(index=URLS_INDEX, id=doc['_id'])
             deleted += 1
             continue
-        
+
         # Remove if completely missing a scheme (e.g., "www.example.com")
         if not parsed.scheme:
             print(f"Deleted URL with no scheme: -{url}-")
@@ -2283,8 +2310,10 @@ def remove_invalid_urls(db):
 
     print(f"\nDone. Total invalid URLs deleted: {deleted}")
 
+
 def remove_blocked_hosts_from_es_db(db):
     compiled_blocklist = [re.compile(pattern) for pattern in HOST_REGEX_BLOCK_LIST]
+
     def is_blocked(host):
         return any(regex.search(host) for regex in compiled_blocklist)
     deleted = 0
@@ -2304,6 +2333,7 @@ def remove_blocked_hosts_from_es_db(db):
             print("Elasticsearch index missing. Creating now...")
             db_create_database(INITIAL_URL, db=db)
     print(f"\nDone. Total deleted: {deleted}")
+
 
 def remove_blocked_urls_from_es_db(db):
    # Compile path-based regex block list

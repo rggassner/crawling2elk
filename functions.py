@@ -1155,6 +1155,11 @@ content_type_plain_text_regex = [
         r"^application/json,application/json$",
     ]
 
+# Regex patterns to match URLs that should be ignored or handled as no-ops
+# Covers fragment identifiers (#), empty URLs, various protocol schemes that
+# are not crawlable web content (social media, messaging, file system, version
+# control, streaming, news feeds, etc.), and application-specific schemes that
+# don't represent standard web resources accessible via HTTP/HTTPS
 url_all_others_regex = [
         r"^#",
         r"^$",

@@ -1179,6 +1179,34 @@ def content_type_midis(args):
 
 @function_for_content_type(content_type_audio_regex)
 def content_type_audios(args):
+    """
+    Handles audio files identified by content type during crawling.
+
+    This function is automatically invoked for URLs whose `Content-Type` matches the
+    `content_type_audio_regex` pattern. It performs the following tasks:
+
+    1. Inserts the URL into the database if it's not already recorded.
+    2. If audio downloading is enabled via the `DOWNLOAD_AUDIOS` flag:
+        - Extracts and decodes the filename from the URL.
+        - Sanitizes the filename to remove unsafe characters.
+        - Truncates the name if necessary, appending a SHA-256 hash to ensure uniqueness.
+        - Saves the audio content to a file in the `AUDIOS_FOLDER` directory.
+
+    Args:
+        args (dict): A dictionary containing:
+            - 'url' (str): The URL of the audio file.
+            - 'content_type' (str): MIME type of the content (e.g., "audio/mpeg").
+            - 'content' (bytes): Binary data of the audio file.
+            - 'parent_host' (str): The host from which this URL was discovered.
+            - 'db' (sqlite3.Connection or compatible): Database connection for storing metadata.
+
+    Returns:
+        bool: Always returns True to indicate the content has been processed.
+
+    Notes:
+        - If `DOWNLOAD_AUDIOS` is False, the file is not saved, but the URL is still tracked.
+        - The final filename is safe for filesystems and guaranteed to be unique using hashing.
+    """
     db_insert_if_new_url(
         url=args['url'],
         content_type=args['content_type'],
@@ -2336,10 +2364,12 @@ def remove_blocked_hosts_from_es_db(db):
 
 
 def remove_blocked_urls_from_es_db(db):
-   # Compile path-based regex block list
+    # Compile path-based regex block list
     compiled_url_blocklist = [re.compile(pattern) for pattern in URL_REGEX_BLOCK_LIST]
+
     def is_blocked_path(path):
         return any(regex.search(path) for regex in compiled_url_blocklist)
+
     deleted = 0
     query = {"query": {"match_all": {}}}
     try:
@@ -2357,6 +2387,7 @@ def remove_blocked_urls_from_es_db(db):
             print("Elasticsearch index missing. Creating now...")
             db_create_database(INITIAL_URL, db=db)
     print(f"\nDone. Total deleted by path: {deleted}")
+
 
 def make_https_app():
     return web.Application([
@@ -2406,6 +2437,7 @@ def get_instance_number():
     except Exception as e:
         print(f"Error determining instance number: {e}")
     return 999
+
 
 def process_input_url_files(db):
     if not os.path.isdir(INPUT_DIR):
@@ -2474,7 +2506,7 @@ def main():
             print("Instance 1: Deleting invalid urls.")
             remove_invalid_urls(db)
         print("Instance 1: Checking for input URL files...")
-        process_input_url_files(db)            
+        process_input_url_files(db)
         print("Instance 1: Let's go full crawler mode.")
         crawler(db)
     elif instance == 2:

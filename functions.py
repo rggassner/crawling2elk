@@ -820,6 +820,7 @@ content_type_audio_regex = [
         r"^audio/wav$",
         r"^audio/aac$",
         r"^audio/m4a$",
+        r"^audio/s3m$",
         r"^audio/wave$",
         r"^audio/MP2T$",
         r"^audio/webm$",
@@ -1241,6 +1242,11 @@ url_all_others_regex = [
         r"^(javascript:|javacscript:|javacript:|javascripy:|javscript:|javascript\.|javascirpt:|javascript;|javascriot:|javascritp:|havascript:|javescript:|javascrip:|javascrpit:|js:|javascripr:|javastript:|javascipt:|javsacript:|javasript:|javascrit:|javascriptt:|ja vascript:|javascrtipt:|jasvascript:|javascropt:|jvascript:|javasctipt:|avascript:|javacsript:)",
     ]
 
+# Regex patterns to match miscellaneous content types that don't fit other categories
+# Covers empty/null values, generic types (binary, unknown), malformed MIME types,
+# CSS/JavaScript variants, 3D model formats, programming languages (MATLAB, Haskell),
+# redirects, multipart content, and various non-standard or incorrectly formatted
+# content type headers that require catch-all handling
 content_type_all_others_regex = [
         r"^$",
         r"^-$",
@@ -1424,6 +1430,7 @@ content_type_all_others_regex = [
         r"^Content-Type:application/json$",
         r"^application/vnd\.ogc\.wms_xml$",
         r"^application/x-apple-diskimage$",
+        r"^:application/application/json$",
         r"^application/vnd\.bestbuy\+json$",
         r"^application/x-chrome-extension$",
         r"^application/x-mobipocket-ebook$",

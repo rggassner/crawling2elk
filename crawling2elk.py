@@ -1244,6 +1244,35 @@ def content_type_audios(args):
 
 @function_for_content_type(content_type_video_regex)
 def content_type_videos(args):
+    """
+    Handles video files identified by their content type during crawling.
+
+    This function is triggered when a URL's content type matches the `content_type_video_regex`.
+    It performs the following actions:
+
+    1. Inserts the URL into the database if it hasn't already been recorded.
+    2. If video downloading is enabled via the `DOWNLOAD_VIDEOS` flag:
+        - Extracts and decodes the filename from the URL.
+        - Sanitizes the filename to replace unsafe characters.
+        - Truncates the filename if it's too long, preserving the extension.
+        - Prepends a SHA-256 hash to ensure filename uniqueness and avoid collisions.
+        - Saves the binary video content to a file within the `VIDEOS_FOLDER` directory.
+
+    Args:
+        args (dict): A dictionary containing:
+            - 'url' (str): The URL of the video file.
+            - 'content_type' (str): The MIME type of the content (e.g., "video/mp4").
+            - 'content' (bytes): The raw binary content of the video file.
+            - 'parent_host' (str): The domain where the video link was found.
+            - 'db' (sqlite3.Connection or compatible): Database connection used to record the URL.
+
+    Returns:
+        bool: Always returns True, indicating the content has been processed.
+
+    Notes:
+        - If `DOWNLOAD_VIDEOS` is False, the video is not downloaded but metadata is still saved.
+        - Filenames are made filesystem-safe and uniquely identifiable using SHA-256 hashes.
+    """
     db_insert_if_new_url(
         url=args['url'],
         content_type=args['content_type'],

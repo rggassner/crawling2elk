@@ -841,6 +841,7 @@ content_type_audio_regex = [
         r"^audio/prs\.sid$",
         r"^application/mp3$",
         r"^audio/x-mpegurl$",
+        r"^application/mp4$",
         r"^audio/x-oggvorbis$",
         r"^audio/x-pn-realaudio$",
         r"^application/octetstream$",
@@ -1067,16 +1068,19 @@ content_type_video_regex = [
         r"^application/mp4$",
         r"^video/x-msvideo$",
         r"^video/quicktime$",
+        r"^application/mp4$",
         r"^video/x-matroska$",
         r"^application/x-mpegurl$",
+        r"^video/vnd\.objectvideo$",
         r"^application/octetstream$",
-        r"^application/x-octet-stream$",
-        r"^application/octet-stream$",
         r"^application/vnd\.ms-asf$",
+        r"^application/octet-stream$",
         r"^video/vnd\.dlna\.mpeg-tts$",
+        r"^application/x-octet-stream$",
         r"^application/x-shockwave-flash$",
         r"^application/vnd\.apple\.mpegurl$",
         r"^application/vnd\.adobe\.flash\.movie$",
+        r"^application/mp4,audio/mp4,video/mp4,video/vnd\.objectvideo$",
         ]
 
 # Regex patterns to match plain text and text-based file content types in HTTP headers
@@ -1331,6 +1335,7 @@ content_type_all_others_regex = [
         r"^application/xml-dtd$",
         r"^application/x-empty$",
         r"^application/x-blorb$",
+        r"^application/java-vm$",
         r"^application/rfc\+xml$",
         r"^application/x-netcdf$",
         r"^application/gml\+xml$",
@@ -1510,8 +1515,17 @@ content_type_all_others_regex = [
         r"^application/vnd\.vmware\.horizon\.manager\.branding\+json$",
     ]
 
-# When creating a new content_type group, you'll have to change the
-# needs_download variable in fast_extension_crawler function
+# Mapping of file extensions to their corresponding content-type regex groups.
+# This is used during fast extension-based crawling to decide which handler should process a file
+# based on its extension before fetching the actual content type.
+#
+# IMPORTANT: When adding a new extension and its corresponding content-type group here,
+# make sure to also update the `needs_download` logic in the `fast_extension_crawler` function
+# so the new type is either downloaded or skipped as expected.
+#
+# Additionally, ensure a corresponding handler function is decorated with
+# @function_for_content_type(<your_new_regex>) and implemented properly
+# to process and optionally store the file.
 EXTENSION_MAP = {
         ".aac": content_type_audio_regex,
         ".aif": content_type_audio_regex,

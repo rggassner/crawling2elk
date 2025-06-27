@@ -1310,6 +1310,35 @@ def content_type_videos(args):
 
 @function_for_content_type(content_type_pdf_regex)
 def content_type_pdfs(args):
+    """
+    Handles PDF files detected by content type during crawling.
+
+    This function is automatically triggered for URLs whose `Content-Type` matches
+    the `content_type_pdf_regex`. It carries out the following steps:
+
+    1. Inserts the URL and its metadata into the database, marking it as visited.
+    2. If `DOWNLOAD_PDFS` is enabled:
+        - Extracts and decodes the filename from the URL path.
+        - Sanitizes the filename by replacing unsafe characters with underscores.
+        - Truncates overly long filenames while preserving the file extension.
+        - Prepends a SHA-256 hash of the URL to ensure uniqueness.
+        - Saves the binary PDF content to the `PDFS_FOLDER` directory.
+
+    Args:
+        args (dict): A dictionary containing:
+            - 'url' (str): The URL pointing to the PDF file.
+            - 'content_type' (str): The MIME type of the file (e.g., "application/pdf").
+            - 'content' (bytes): The binary content of the PDF file.
+            - 'parent_host' (str): The domain or IP from which the URL was found.
+            - 'db' (sqlite3.Connection or compatible): Database connection object.
+
+    Returns:
+        bool: Always returns True to indicate successful processing.
+
+    Notes:
+        - If `DOWNLOAD_PDFS` is False, the file is not saved, but the URL is still logged in the DB.
+        - The saved filename is safe for use in filesystems and uniquely identifies the source URL.
+    """
     db_insert_if_new_url(
         url=args['url'],
         content_type=args['content_type'],

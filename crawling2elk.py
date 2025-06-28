@@ -1376,6 +1376,35 @@ def content_type_pdfs(args):
 
 @function_for_content_type(content_type_doc_regex)
 def content_type_docs(args):
+    """
+    Handles document files (e.g., .doc, .docx) identified by content type during crawling.
+
+    This function is called when a URL's `Content-Type` matches the `content_type_doc_regex`.
+    It performs the following operations:
+
+    1. Records the URL and its metadata in the database, marking it as visited.
+    2. If `DOWNLOAD_DOCS` is enabled:
+        - Extracts and decodes the filename from the URL path.
+        - Sanitizes the filename by replacing unsafe characters.
+        - Truncates the filename if necessary, while preserving the extension.
+        - Prepends a SHA-256 hash of the URL to guarantee uniqueness.
+        - Saves the document content as a binary file in the `DOCS_FOLDER` directory.
+
+    Args:
+        args (dict): A dictionary containing:
+            - 'url' (str): The full URL of the document.
+            - 'content_type' (str): The MIME type (e.g., "application/msword").
+            - 'content' (bytes): Raw binary content of the document.
+            - 'parent_host' (str): The originating host or domain.
+            - 'db' (sqlite3.Connection or similar): Database connection used for storing metadata.
+
+    Returns:
+        bool: Always returns True to indicate the URL has been processed.
+
+    Notes:
+        - If `DOWNLOAD_DOCS` is False, the document will not be saved, but its metadata is still stored.
+        - The filename is made safe and unique using SHA-256 hashing and regex sanitization.
+    """
     db_insert_if_new_url(
         url=args['url'],
         content_type=args['content_type'],

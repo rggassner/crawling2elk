@@ -379,6 +379,10 @@ def is_open_directory(content, content_url):
         r'<tr\s+class=["\']indexhead["\']>\s*<th\s+class=["\']indexcolicon["\']>\s*<img\s+src=["\']/icons/blank\.gif["\']\s+alt=["\']\[ICO\]["\']\s*/?>\s*</th>\s*<th\s+class=["\']indexcolname["\']>\s*<a\s+href=["\']\?C=N;O=A["\']>\s*Name\s*</a>\s*</th>\s*<th\s+class=["\']indexcollastmod["\']>\s*<a\s+href=["\']\?C=M;O=A["\']>\s*Last\s+modified\s*</a>\s*</th>\s*<th\s+class=["\']indexcolsize["\']>\s*<a\s+href=["\']\?C=S;O=A["\']>\s*Size\s*</a>\s*</th>\s*</tr>',
         r'\.calibreRangeWrapper',
         r'<body\sstyle="font-size:medium">[a-z]*\sFolder\s*\t*<a\shref="/list\?dir=1">',
+        r'<img\s+[^>]*alt="\[PARENTDIR\]"[^>]*>',
+        r'<img\s+[^>]*alt="\[DIR\]"[^>]*>',
+        r'\.\.\/">Parent Directory<\/a>',
+        r'https:\/\/github\.com\/DirectoryLister\/DirectoryLister',
     ]
 
     for pat in patterns:
@@ -1442,6 +1446,35 @@ def content_type_docs(args):
 
 @function_for_content_type(content_type_database_regex)
 def content_type_databases(args):
+    """
+    Handles database files (e.g., .sql, .mdb) identified by content type during crawling.
+
+    This function is triggered when a URL's `Content-Type` matches the `content_type_database_regex`.
+    It performs the following operations:
+
+    1. Records the URL and associated metadata in the database, marking it as visited.
+    2. If `DOWNLOAD_DATABASES` is enabled:
+        - Extracts the filename from the URL path and attempts to decode it.
+        - Sanitizes the filename to remove unsafe characters.
+        - Truncates the filename if it's too long, preserving the extension.
+        - Prepends a SHA-256 hash of the URL to guarantee uniqueness.
+        - Saves the database file (in binary format) to the `DATABASES_FOLDER`.
+
+    Args:
+        args (dict): A dictionary containing:
+            - 'url' (str): The URL pointing to the database file.
+            - 'content_type' (str): The MIME type of the file (e.g., "application/sql").
+            - 'content' (bytes): Binary content of the database file.
+            - 'parent_host' (str): The domain or host where the link was found.
+            - 'db' (sqlite3.Connection or compatible): A database connection object for metadata storage.
+
+    Returns:
+        bool: Always returns True to indicate successful processing.
+
+    Notes:
+        - If `DOWNLOAD_DATABASES` is False, the file is not saved, but the URL is still recorded.
+        - The filename is sanitized and prefixed with a hash to ensure it's both safe and unique.
+    """
     db_insert_if_new_url(
         url=args['url'],
         content_type=args['content_type'],

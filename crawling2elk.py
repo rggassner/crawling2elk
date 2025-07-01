@@ -382,7 +382,9 @@ def is_open_directory(content, content_url):
         r'<img\s+[^>]*alt="\[PARENTDIR\]"[^>]*>',
         r'<img\s+[^>]*alt="\[DIR\]"[^>]*>',
         r'\.\.\/">Parent Directory<\/a>',
+        r'\.\.\/">Parent directory\/<\/a>',
         r'https:\/\/github\.com\/DirectoryLister\/DirectoryLister',
+        r'<h1>Directory \/',
     ]
 
     for pat in patterns:
@@ -1512,6 +1514,35 @@ def content_type_databases(args):
 
 @function_for_content_type(content_type_font_regex)
 def content_type_fonts(args):
+    """
+    Handles font files (e.g., .ttf, .otf, .woff) identified by content type during crawling.
+
+    This function is invoked when a URL's `Content-Type` matches the `content_type_font_regex`.
+    It performs the following operations:
+
+    1. Inserts the URL and its metadata into the database, marking it as visited.
+    2. If `DOWNLOAD_FONTS` is enabled:
+        - Extracts the filename from the URL path and decodes any URL-encoded characters.
+        - Sanitizes the filename to replace unsafe characters with underscores.
+        - Truncates overly long filenames, while preserving the extension.
+        - Prepends a SHA-256 hash of the URL to ensure filename uniqueness.
+        - Saves the font content (binary) to a file inside the `FONTS_FOLDER` directory.
+
+    Args:
+        args (dict): A dictionary with the following keys:
+            - 'url' (str): The full URL pointing to the font file.
+            - 'content_type' (str): The MIME type of the file (e.g., "font/woff2").
+            - 'content' (bytes): The raw binary content of the font.
+            - 'parent_host' (str): The domain or IP from which the font was discovered.
+            - 'db' (sqlite3.Connection or compatible): Database connection for logging the metadata.
+
+    Returns:
+        bool: Always returns True, indicating the font file (or its metadata) was successfully processed.
+
+    Notes:
+        - If `DOWNLOAD_FONTS` is set to False, the font content will not be saved, but the URL will still be recorded.
+        - The filename is constructed to be filesystem-safe and globally unique using hashing.
+    """
     db_insert_if_new_url(
         url=args['url'],
         content_type=args['content_type'],

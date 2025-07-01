@@ -1377,6 +1377,7 @@ content_type_all_others_regex = [
         r"^application/pkcs7-mime$",
         r"^application/javascript$",
         r"^application/oct-stream$",
+        r"^application/vnd\.ms-wpl$",
         r"^application/x-asciicast$",
         r"^applications/javascript$",
         r"^javascriptcharset=UTF-8$",

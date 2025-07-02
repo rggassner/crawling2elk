@@ -385,6 +385,7 @@ def is_open_directory(content, content_url):
         r'\.\.\/">Parent directory\/<\/a>',
         r'https:\/\/github\.com\/DirectoryLister\/DirectoryLister',
         r'<h1>Directory \/',
+        r'powered by h5ai',
     ]
 
     for pat in patterns:
@@ -1580,6 +1581,35 @@ def content_type_fonts(args):
 
 @function_for_content_type(content_type_torrent_regex)
 def content_type_torrents(args):
+    """
+    Handles torrent files (e.g., .torrent) identified by content type during crawling.
+
+    This function is executed when a URL's `Content-Type` matches the `content_type_torrent_regex`.
+    It performs the following operations:
+
+    1. Logs the URL and its associated metadata in the database, marking it as visited.
+    2. If `DOWNLOAD_TORRENTS` is enabled:
+        - Extracts the filename from the URL path and decodes any percent-encoded characters.
+        - Sanitizes the filename to ensure filesystem safety by replacing problematic characters.
+        - Truncates the filename if it's too long, ensuring the extension remains intact.
+        - Prepends a SHA-256 hash of the URL to make the filename globally unique.
+        - Writes the torrent file (binary content) to the `TORRENTS_FOLDER` directory.
+
+    Args:
+        args (dict): A dictionary containing:
+            - 'url' (str): The URL pointing to the torrent file.
+            - 'content_type' (str): The MIME type of the content (e.g., "application/x-bittorrent").
+            - 'content' (bytes): Binary content of the torrent file.
+            - 'parent_host' (str): Hostname or IP from which the URL was found.
+            - 'db' (sqlite3.Connection or compatible): A database connection used to store metadata.
+
+    Returns:
+        bool: Always returns True, indicating the torrent URL has been processed.
+
+    Notes:
+        - If `DOWNLOAD_TORRENTS` is False, the file is not downloaded, but metadata is still logged.
+        - The filename is made safe and unique using regex sanitization and SHA-256 hashing.
+    """
     db_insert_if_new_url(
         url=args['url'],
         content_type=args['content_type'],

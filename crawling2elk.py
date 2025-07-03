@@ -1647,6 +1647,35 @@ def content_type_torrents(args):
 
 @function_for_content_type(content_type_compressed_regex)
 def content_type_compresseds(args):
+    """
+    Handles compressed archive files (e.g., .zip, .gz, .rar) identified by content type during crawling.
+
+    This function is invoked when a URL's `Content-Type` matches the `content_type_compressed_regex`.
+    It performs the following steps:
+
+    1. Records the URL and its metadata in the database, marking it as visited.
+    2. If `DOWNLOAD_COMPRESSEDS` is enabled:
+        - Extracts the base filename from the URL and attempts to decode it.
+        - Sanitizes the filename by replacing any unsafe characters with underscores.
+        - Truncates the filename if it exceeds the maximum safe length, preserving the extension.
+        - Prepends a SHA-256 hash of the URL to ensure the filename is globally unique.
+        - Writes the binary content of the compressed file to the `COMPRESSEDS_FOLDER` directory.
+
+    Args:
+        args (dict): A dictionary containing:
+            - 'url' (str): The URL of the compressed file.
+            - 'content_type' (str): The MIME type of the file (e.g., "application/zip").
+            - 'content' (bytes): Binary content of the compressed file.
+            - 'parent_host' (str): The host or domain from which the URL was discovered.
+            - 'db' (sqlite3.Connection or compatible): Database connection used for logging metadata.
+
+    Returns:
+        bool: Always returns True, indicating the file (or its metadata) was successfully processed.
+
+    Notes:
+        - If `DOWNLOAD_COMPRESSEDS` is False, the content is skipped but the metadata is still saved.
+        - Sanitization and hashing ensure all filenames are safe for the filesystem and uniquely traceable.
+    """
     db_insert_if_new_url(
         url=args['url'],
         content_type=args['content_type'],

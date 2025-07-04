@@ -1316,6 +1316,7 @@ content_type_all_others_regex = [
         r"^application/x-xcf$",
         r"^application/x-msi$",
         r"^application/x-xar$",
+        r"^application/proto$",
         r"^model/gltf-binary$",
         r"^application/x-shar$",
         r"^application/x-ruby$",

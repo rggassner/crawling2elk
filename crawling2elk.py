@@ -386,6 +386,7 @@ def is_open_directory(content, content_url):
         r'https:\/\/github\.com\/DirectoryLister\/DirectoryLister',
         r'<h1>Directory \/',
         r'powered by h5ai',
+        r'<h1>Directory: \/',
     ]
 
     for pat in patterns:

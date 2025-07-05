@@ -387,6 +387,7 @@ def is_open_directory(content, content_url):
         r'<h1>Directory \/',
         r'powered by h5ai',
         r'<h1>Directory: \/',
+        r'<hr>Directory Listing Script &copy;',
     ]
 
     for pat in patterns:
@@ -1714,7 +1715,30 @@ def content_type_compresseds(args):
 
 @function_for_content_type(content_type_all_others_regex)
 def content_type_ignore(args):
-    # We update as visited.
+    """
+    Handles all other content types not explicitly processed by specialized handlers.
+
+    This function is invoked when a URL's `Content-Type` matches the
+    `content_type_all_others_regex`, which serves as a fallback for any content types
+    that don’t fall into specific categories like audio, video, PDF, etc.
+
+    Its sole responsibility is to mark the URL as visited and record its metadata in the database
+    without downloading or storing the content.
+
+    Args:
+        args (dict): A dictionary containing:
+            - 'url' (str): The URL of the resource.
+            - 'content_type' (str): The MIME type of the content.
+            - 'parent_host' (str): The host where the URL was found.
+            - 'db' (sqlite3.Connection or similar): Database connection used to store the metadata.
+
+    Returns:
+        bool: Always returns True to indicate the URL was processed and marked as visited.
+
+    Notes:
+        - This handler ensures complete tracking of crawled content types, even if they are ignored.
+        - No content is downloaded or saved for these types.
+    """
     db_insert_if_new_url(
             url=args['url'],
             visited=True,

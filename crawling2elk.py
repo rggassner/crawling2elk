@@ -1752,6 +1752,24 @@ def content_type_ignore(args):
 
 
 def sanitize_content_type(content_type):
+    """
+    Cleans and normalizes a raw Content-Type string.
+
+    This function is used to sanitize HTTP `Content-Type` header values by:
+    - Stripping leading/trailing whitespace.
+    - Removing surrounding quotes, if any.
+    - Stripping the "content-type:" prefix, in a case-insensitive and format-tolerant way.
+    - Removing any additional metadata after a semicolon (e.g., charset info).
+    - Removing all internal whitespace.
+
+    This results in a clean MIME type string such as `application/pdf`, `audio/mpeg`, etc.
+
+    Args:
+        content_type (str): The raw Content-Type string extracted from headers.
+
+    Returns:
+        str: A cleaned and normalized content type string.
+    """
     content_type = content_type.strip()
     content_type = content_type.rstrip()
     content_type = re.sub(r'^"(.*)"$', r"\1", content_type)  # remove surrounding quotes if present

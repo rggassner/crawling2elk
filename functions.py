@@ -1355,6 +1355,7 @@ content_type_all_others_regex = [
         r"^application/x-bibtex$",
         r"^application/pkix-crl$",
         r"^httpd/unix-directory$",
+        r"^application/x-stuffit$",
         r"^application/calques3d$",
         r"^application/n-triples$",
         r"^application/vnd\.smaf$",

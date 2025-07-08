@@ -1781,6 +1781,39 @@ def sanitize_content_type(content_type):
 
 
 def get_page(url, driver, db):
+    """
+    Fetches a web page using Selenium, processes its requests, and dispatches content
+    to appropriate handlers based on content type. It also logs metadata and errors in the database.
+
+    This function performs the following tasks:
+    1. Loads the given URL using the provided Selenium `driver`.
+    2. Iterates over all HTTP requests/responses made by the page.
+    3. For each response:
+        - If it's a redirect (301, 302, etc.), marks it as visited in the database.
+        - If it includes a `Content-Type` header:
+            - Attempts to decode the response body using appropriate encoding.
+            - Handles specific decoding errors (e.g., Brotli, gzip, Unicode) by logging them with
+              special tags in the database.
+            - Sanitizes the `Content-Type` string.
+            - If the host is allowed (not blocklisted), dispatches the content to the corresponding
+              handler function registered for that MIME type.
+            - If `HUNT_OPEN_DIRECTORIES` is enabled, checks for open directories and records them.
+    4. Regardless of results, ensures the original URL and the final URL are marked as visited.
+
+    Args:
+        url (str): The original URL to be fetched and analyzed.
+        driver (selenium-wire webdriver): A Selenium WebDriver instance with request capturing enabled.
+        db (sqlite3.Connection or similar): The database connection used to store metadata and results.
+
+    Returns:
+        None
+
+    Notes:
+        - Content is dispatched to handler functions registered via `@function_for_content_type(...)`.
+        - Known decoding errors are caught and logged under different `source` tags to help debugging.
+        - Unrecognized content types are printed for inspection.
+        - All URLs are recorded with their visit status, even if processing fails.
+    """
     original_url = url
     driver = read_web(url, driver)  # Fetch the page using Selenium
     parent_host = urlsplit(url)[1]  # Get the parent host from the URL

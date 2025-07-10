@@ -388,6 +388,7 @@ def is_open_directory(content, content_url):
         r'powered by h5ai',
         r'<h1>Directory: \/',
         r'<hr>Directory Listing Script &copy;',
+        r'<a href="\.\.\/">Parent directory\/<\/a>',
     ]
 
     for pat in patterns:

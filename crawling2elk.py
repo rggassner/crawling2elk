@@ -389,6 +389,7 @@ def is_open_directory(content, content_url):
         r'<h1>Directory: \/',
         r'<hr>Directory Listing Script &copy;',
         r'<a href="\.\.\/">Parent directory\/<\/a>',
+        r'<a href="\?C=N&O=A">Name<\/a>',
     ]
 
     for pat in patterns:

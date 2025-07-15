@@ -1402,6 +1402,7 @@ content_type_all_others_regex = [
         r"^application/marcxml\+xml$",
         r"^application/v3\.25\+json$",
         r"^javascript charset=UTF-8$",
+        r"^application/x-ipynb\+json$",
         r"^application/jwk-set\+json$",
         r"^multipart/x-mixed-replace$",
         r"^application/pgp-encrypted$",

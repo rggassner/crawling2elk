@@ -1455,6 +1455,7 @@ content_type_all_others_regex = [
         r"^application/vnd\.wv\.csp\+wbxml$",
         r"^application/x-ms-dos-executable$",
         r"^application/vnd\.1cbn\.v1\+json$",
+        r"^application/vnd\.geogebra\.file$",
         r"^application/grpc-web-text\+proto$",
         r"^application/sparql-results\+json$",
         r"^application/vnd\.lotus-screencam$",

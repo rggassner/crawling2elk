@@ -1091,6 +1091,7 @@ content_type_video_regex = [
 # representations that should be processed as readable text content
 content_type_plain_text_regex = [
         r"^\.js$",
+        r"^text/\*$",
         r"^text/js$",
         r"^text/xml$",
         r"^text/srt$",
@@ -1279,6 +1280,7 @@ content_type_all_others_regex = [
         r"^cms/redirect$",
         r"^message/news$",
         r"^text/x-matlab$",
+        r"^inode/x-empty$",
         r"^text/x-invalid$",
         r"^application/js$",
         r"^application/\*$",

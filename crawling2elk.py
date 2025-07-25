@@ -399,6 +399,7 @@ def is_open_directory(content, content_url):
         r'<a href="\?srt=size"><b>Размер</b></a>',
         r'<title>Directory listing of http',
         r'<input type="search" id="search" value="" class="form-control search" placeholder="Nom du fichier">',
+        r'<td><a href="\?dir=\.">Parent Directory<\/a>',
     ]
 
     for pat in patterns:

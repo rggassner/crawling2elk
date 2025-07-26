@@ -1327,6 +1327,7 @@ content_type_all_others_regex = [
         r"^application/x-tgif$",
         r"^application/x-perl$",
         r"^application/binary$",
+        r"^application/json-p$",
         r"^application/turtle$",
         r"^application/x-doom$",
         r"^application/x-troff$",

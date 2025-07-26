@@ -400,6 +400,7 @@ def is_open_directory(content, content_url):
         r'<title>Directory listing of http',
         r'<input type="search" id="search" value="" class="form-control search" placeholder="Nom du fichier">',
         r'<td><a href="\?dir=\.">Parent Directory<\/a>',
+        r'<a href="https://github\.com/DirectoryLister/DirectoryLister"',
     ]
 
     for pat in patterns:

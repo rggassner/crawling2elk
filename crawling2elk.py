@@ -391,6 +391,7 @@ def is_open_directory(content, content_url):
         r'<a href="\.\.\/">Parent directory\/<\/a>',
         r'<a href="\?C=N&O=A">Name<\/a>',
         r'<a href="\?C=N;O=A">Name</a>',
+        r'<a href="\?C=N&O=D">Name&nbsp; &#8679;<\/a>',
         r'<a href="\?C=M;O=A">Last modified</a>',
         r'<a href="\.\.\/\?C=N&amp;O=D">Parent directory\/<\/a>',
         r'<td align="center" class="powered">Powered by <a href="https://www.pcloud.com/">pCloud</a></td>',

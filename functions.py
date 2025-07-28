@@ -1305,6 +1305,7 @@ content_type_all_others_regex = [
         r"^application/wasm$",
         r"^application/x-js$",
         r"^application/mobi$",
+        r"^model/gltf\+json$",
         r"^application/save$",
         r"^application/null$",
         r"^application/zlib$",

@@ -832,6 +832,7 @@ content_type_audio_regex = [
         r"^audio/x-rpm$",
         r"^audio/x-s3m$",
         r"^audio/x-wav$",
+        r"^audio/mpeg3$",
         r"^audio/x-aiff$",
         r"^audio/x-flac$",
         r"^audio/unknown$",

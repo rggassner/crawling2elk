@@ -383,6 +383,7 @@ def is_open_directory(content, content_url):
         r'<img\s+[^>]*alt="\[DIR\]"[^>]*>',
         r'\.\.\/">Parent Directory<\/a>',
         r'\.\.\/">Parent directory\/<\/a>',
+        r'<a href="\.\./">\.\./</a>',
         r'https:\/\/github\.com\/DirectoryLister\/DirectoryLister',
         r'<h1>Directory \/',
         r'powered by h5ai',

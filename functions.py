@@ -1092,6 +1092,7 @@ content_type_video_regex = [
 # representations that should be processed as readable text content
 content_type_plain_text_regex = [
         r"^\.js$",
+        r"^text$",
         r"^text/\*$",
         r"^text/js$",
         r"^text/xml$",
@@ -1386,6 +1387,7 @@ content_type_all_others_regex = [
         r"^application/pkcs7-mime$",
         r"^application/javascript$",
         r"^application/oct-stream$",
+        r"^application/x-httpd-cgi$",
         r"^application/vnd\.ms-wpl$",
         r"^application/x-asciicast$",
         r"^applications/javascript$",

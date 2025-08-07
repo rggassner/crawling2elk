@@ -1531,6 +1531,7 @@ content_type_all_others_regex = [
         r"^application/vnd\.openxmlformats-officedocument\.spre$",
         r"^application/vnd\.oracle\.adf\.resourcecollection\+json$",
         r"^application/vnd\.vmware\.horizon\.manager\.branding\+json$",
+        r"^application/vnd\.vimeo\.live\.interaction_room_status\+json$",
     ]
 
 # Mapping of file extensions to their corresponding content-type regex groups.

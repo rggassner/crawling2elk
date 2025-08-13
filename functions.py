@@ -1483,6 +1483,7 @@ content_type_all_others_regex = [
         r"^application/vnd\.vimeo\.user\+json$",
         r"^application/octet-stream,text/html$",
         r"^application/vnd\.wg\.cds_api\+json$",
+        r"^application/vnd\.vimeo\.album\+json$",
         r"^application/json-amazonui-streaming$",
         r"^application/vnd\.vimeo\.video\+json$",
         r"^application/x-research-info-systems$",

@@ -814,6 +814,7 @@ content_type_midi_regex = [
 # proprietary formats (WMA, RealAudio), playlist formats (M3U, PLS), and
 # generic binary types that may contain audio content
 content_type_audio_regex = [
+        r"^audio/xm$",
         r"^audio/ogg$",
         r"^audio/mp3$",
         r"^audio/mp4$",
@@ -1460,6 +1461,7 @@ content_type_all_others_regex = [
         r"^application/vnd\.ms-fontobject$",
         r"^application/privatetempstorage$",
         r"^application/vnd\.ms-powerpoint$",
+        r"^application/sparql-results\+xml$",
         r"^application/vnd\.openxmlformats$",
         r"^application/apple\.vnd\.mpegurl$",
         r"^application/vnd\.ms-officetheme$",
@@ -1557,6 +1559,7 @@ EXTENSION_MAP = {
         ".rm": content_type_audio_regex,
         ".s3m": content_type_audio_regex,
         ".wav": content_type_audio_regex,
+        ".xm": content_type_audio_regex,
         ".Z": content_type_compressed_regex,
         ".lz": content_type_compressed_regex,
         ".7z": content_type_compressed_regex,

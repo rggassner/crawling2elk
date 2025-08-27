@@ -2754,8 +2754,24 @@ def process_input_url_files(db):
         file_to_process = os.path.join(INPUT_DIR, random.choice(files))
         print(f"Processing input file: {file_to_process}")
 
-        with open(file_to_process, "r", encoding="utf-8") as f:
-            lines = f.readlines()
+        try:
+            # Try normal UTF-8 read
+            with open(file_to_process, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+        except UnicodeDecodeError as e:
+            print(f"Unicode error in {file_to_process}: {e}")
+            print("Retrying with line-by-line decode (bad chars replaced).")
+
+            lines = []
+            with open(file_to_process, "rb") as f:  # binary read
+                for i, raw_line in enumerate(f, 1):
+                    try:
+                        line = raw_line.decode("utf-8")
+                    except UnicodeDecodeError as e:
+                        print(f"Problem in line {i}: {e} -> replacing bad chars")
+                        line = raw_line.decode("utf-8", errors="replace")
+                    lines.append(line)
 
         if not lines:
             print(f"File is empty, deleting: {file_to_process}")
@@ -2788,7 +2804,6 @@ def process_input_url_files(db):
             os.remove(file_to_process)
             print(f"File fully processed and removed: {file_to_process}")
 
-
 def main():
     instance = get_instance_number()
     db = DatabaseConnection()
@@ -2814,12 +2829,12 @@ def main():
     elif instance == 2:
         print("Instance 2: Running fast extension pass only. Not everything needs selenium... running requests in urls that looks like files.")
         run_fast_extension_pass(db)
-    elif instance == 3:
-        print("Instance 3: Scanning IPs in some unconventional ports and protocols combinations.")
-        try:
-            subprocess.run(["venv/bin/python3", "scanner.py"], check=True)
-        except subprocess.CalledProcessError as e:
-            print(f"Error while running scanner.py: {e}")
+    #elif instance == 3:
+    #    print("Instance 3: Scanning IPs in some unconventional ports and protocols combinations.")
+    #    try:
+    #        subprocess.run(["venv/bin/python3", "scanner.py"], check=True)
+    #    except subprocess.CalledProcessError as e:
+    #        print(f"Error while running scanner.py: {e}")
     else:
         print(f"Instance {instance}: Running full crawler.")
         crawler(db)

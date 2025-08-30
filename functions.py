@@ -1431,6 +1431,7 @@ content_type_all_others_regex = [
         r"^application/x-octet-stream$",
         r"^application/x-x509-ca-cert$",
         r"^x-application/octet-stream$",
+        r"^application/mac-compactpro$",
         r"^application/x-endnote-refer$",
         r"^application/vnd\.olpc-sugar$",
         r"^text/x-unknown-content-type$",

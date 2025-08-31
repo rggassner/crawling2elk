@@ -930,6 +930,7 @@ content_type_image_regex = [
         r"^image/jpeg$",
         r"^image/tiff$",
         r"^image/webp$",
+        r"^image/x-ico$",
         r"^image/pjpeg$",
         r"^image/x-png$",
         r"^image/x-eps$",

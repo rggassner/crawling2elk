@@ -166,6 +166,9 @@ FAST_RANDOM_MAX_WAIT = 0
 
 MAX_SCANNER_WORKERS = 1
 
+# Delay between fast buckets. Used to decrease the elastic search access.
+FAST_DELAY = 20
+
 # Word extraction
 EXTRACT_WORDS = True
 WORDS_REMOVE_SPECIAL_CHARS = True

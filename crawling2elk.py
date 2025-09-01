@@ -2562,6 +2562,7 @@ def run_fast_extension_pass(db, max_workers=MAX_FAST_WORKERS):
         random.shuffle(buckets)
 
         for random_bucket in buckets:
+            time.sleep(FAST_DELAY)
             print(f"[FAST CRAWLER] Extension: {extension} | Bucket: \033[33m{random_bucket}\033[0m")
 
             query = {

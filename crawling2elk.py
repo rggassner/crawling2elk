@@ -26,7 +26,6 @@ from fake_useragent import UserAgent
 from functions import *
 from googlesearch import search
 from io import BytesIO
-from pathlib import PurePosixPath
 from PIL import Image, UnidentifiedImageError
 from seleniumwire import webdriver
 from seleniumwire.utils import decode
@@ -58,6 +57,8 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 url_functions = []
 content_type_functions = []
 lock_file = None  # Global reference to prevent garbage collection
+log_index_pattern = f"{LOGS_URLS_INDEX_PREFIX}-*"
+
 
 # Used to generate wordlist
 soup_tag_blocklist = [
@@ -71,127 +72,6 @@ soup_tag_blocklist = [
     "script",
     "style",
 ]
-
-
-def is_host_block_listed(url):
-    """
-    Check if a given URL matches any pattern in the host blocklist.
-
-    This function iterates through a predefined list of regular expressions
-    (`HOST_REGEX_BLOCK_LIST`) and checks if the given URL matches any of them.
-    The match is case-insensitive and Unicode-aware.
-
-    Args:
-        url (str): The URL to check against the blocklist.
-
-    Returns:
-        bool: True if the URL matches any blocklist pattern, False otherwise.
-    """
-    for regex in HOST_REGEX_BLOCK_LIST:
-        if re.search(regex, url, flags=re.I | re.U):
-            return True
-    return False
-
-
-def is_url_block_listed(url):
-    """
-    Check if a given URL matches any pattern in the URL blocklist.
-
-    This function scans the input URL against a predefined list of regular
-    expressions (`URL_REGEX_BLOCK_LIST`) to determine if it should be blocked.
-    The match is performed in a case-insensitive and Unicode-aware manner.
-
-    Args:
-        url (str): The full URL to check against the blocklist.
-
-    Returns:
-        bool: True if the URL matches any blocklist pattern, False otherwise.
-    """
-    for regex in URL_REGEX_BLOCK_LIST:
-        if re.search(regex, url, flags=re.I | re.U):
-            return True
-    return False
-
-
-def is_host_allow_listed(url):
-    """
-    Check if a URL's host matches any regular expression in the allowlist.
-
-    This function iterates through the `HOST_REGEX_ALLOW_LIST`, which contains
-    regular expression patterns representing hosts that are explicitly allowed.
-    If the host part of the given URL matches any of the patterns, the function returns True.
-
-    Args:
-        url (str): The URL to evaluate.
-
-    Returns:
-        bool: True if the URL matches an allowlist pattern, False otherwise.
-    """
-    for regex in HOST_REGEX_ALLOW_LIST:
-        if re.search(regex, url, flags=re.I | re.U):
-            return True
-    return False
-
-
-def build_conditional_update_script(doc: dict) -> tuple[str, dict]:
-    """
-    Builds a dynamic Elasticsearch update script that only updates fields
-    if their values have changed or meet specific conditions. This reduces
-    unnecessary writes and keeps the `updated_at` timestamp accurate.
-
-    Special logic is applied for:
-    - `visited`: Only set it to True if it was previously null or False.
-    - `updated_at`: This is updated only if any field has actually changed.
-
-    Args:
-        doc (dict): A dictionary representing the fields to update in the document.
-                    Expected to include `updated_at` and may include `visited`.
-
-    Returns:
-        tuple[str, dict]:
-            - A string representing the Elasticsearch painless script.
-            - A dictionary of parameters to be passed with the script (`params`).
-
-    Example:
-        doc = {
-            "visited": True,
-            "content_type": "text/html",
-            "updated_at": "2025-06-03T13:00:00Z"
-        }
-
-        script, params = build_conditional_update_script(doc)
-        # Use `script` and `params` with Elasticsearch update API
-    """
-    script_lines = []
-    params = {}
-
-    for key, value in doc.items():
-        params[key] = value
-
-        if key == "visited":
-            # Only set 'visited' to True if it is not already True
-            script_lines.append(
-                "if (ctx._source.visited == null || "
-                "ctx._source.visited == false) {\n"
-                "    ctx._source.visited = params.visited;\n"
-                "}"
-            )
-        elif key != "updated_at":
-            # Conditionally update other fields only if they changed
-            script_lines.append(
-                f"if (ctx._source['{key}'] != params['{key}']) {{\n"
-                f"    ctx._source['{key}'] = params['{key}'];\n"
-                f"}}"
-            )
-
-    # Update `updated_at` only if anything in the source has changed
-    script_lines.append(
-        "if (ctx._source != params.existing_source_snapshot) {\n"
-        "    ctx._source.updated_at = params.updated_at;\n"
-        "}"
-    )
-
-    return "\n".join(script_lines), params
 
 
 def get_words(text: bytes | str) -> list[str]:
@@ -442,7 +322,6 @@ def function_for_url(regexp_list):
     return get_url_function
 
 
-# url unsafe {}|\^~[]`
 @function_for_url(
     [
         r"^(\/|\.\.\/|\.\/)",
@@ -451,187 +330,33 @@ def function_for_url(regexp_list):
     ]
 )
 def relative_url(args):
-    """
-    Handle relative URLs found during crawling and convert them to absolute URLs.
-
-    regex no need to escape '!', '"', '%', "'", ',', '/', ':', ';', '<', '=', '>', '@', and "`"
-
-    This function processes URLs that are relative to the current page (starting with
-    '/', '../', or './') or contain various characters commonly found in web URLs.
-    It converts relative URLs to absolute URLs using the parent page's URL as a base,
-    then adds the new URL to the database for future crawling.
-
-    The function is registered to handle URLs matching these patterns:
-    - Relative paths starting with '/', '../', or './'
-    - URLs containing alphanumeric characters, common punctuation, and special
-      characters typically found in web addresses
-    - Complex URLs with query parameters and fragments
-
-    Args:
-        args (dict): Dictionary containing:
-            - 'url' (str): The relative URL to process
-            - 'parent_url' (str): The absolute URL of the page containing this link
-            - 'db': Database connection object for storing new URLs
-
-    Returns:
-        bool: Always returns True to indicate successful processing
-
-    Note:
-        URLs are marked as unvisited when added to the database. The regex patterns
-        include various Unicode characters and symbols to handle international URLs
-        and special formatting characters found in web content.
-    """
     out_url = urljoin(args['parent_url'], args['url'])
-    parent_host = urlsplit(args['parent_url'])[1]
-    db_insert_if_new_url(url=out_url, visited=False, source="relative_url", parent_host=parent_host, db=args['db'])
-    return True
-
-
-@function_for_url(
-    [
-        r"(\{|\[|\||\}|\]|\~|\^|\\)",
-    ]
-)
-def unsafe_character_url(args):
-    """
-    Handle URLs containing unsafe or problematic characters by ignoring them.
-
-    This function is registered to catch URLs that contain characters which are
-    considered unsafe or problematic for URL processing, specifically:
-    - Curly braces: { }
-    - Square brackets: [ ]
-    - Pipe symbol: |
-    - Tilde: ~
-    - Caret: ^
-    - Backslash: \
-
-    These characters can cause issues in URL parsing, are often found in malformed
-    URLs, or may indicate URLs that are not standard web addresses (e.g., template
-    variables, placeholder text, or escaped content).
-
-    Args:
-        args (dict): Dictionary containing URL processing arguments:
-            - 'url' (str): The URL containing unsafe characters
-            - 'parent_url' (str): The URL of the parent page
-            - 'db': Database connection object
-
-    Returns:
-        bool: Always returns True, effectively filtering out these URLs by
-              not processing them further (no database insertion occurs)
-
-    Note:
-        This function acts as a URL filter - it accepts these URLs but doesn't
-        process them, preventing potentially problematic URLs from being added
-        to the crawling queue.
-    """
-    return True
-
-
-@function_for_url(url_all_others_regex)
-def do_nothing_url(args):
-    """
-    Placeholder function that handles URLs matching catch-all patterns without processing.
-
-    This function is registered to handle URLs that match patterns defined in
-    url_all_others_regex but don't require any specific processing. It serves as
-    a no-op handler that prevents these URLs from being processed by other functions
-    while keeping the regex patterns available as reference.
-
-    The function acts as a documentation mechanism, preserving regex patterns that
-    might be useful for future development or customization without actively
-    processing the matched URLs.
-
-    Args:
-        args (dict): Dictionary containing URL processing arguments:
-            - 'url' (str): The URL that matched the catch-all patterns
-            - 'parent_url' (str): The URL of the parent page
-            - 'db': Database connection object
-
-    Returns:
-        bool: Always returns True to indicate the URL was "handled" (by doing nothing)
-
-    Note:
-        This function serves as a template - developers can replace this implementation
-        with custom logic for handling specific URL patterns as needed. The regex
-        patterns in url_all_others_regex are preserved as a guideline for future
-        functionality.
-    """
-    return True
-
+    parent_host = urlsplit(args['parent_url']).hostname
+    return [{
+        "url": out_url,
+        "visited": False,
+        "source": "relative_url",
+        "parent_host": parent_host,
+        "host": urlsplit(out_url).hostname,
+        "random_bucket": random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }]
 
 @function_for_url([r"^https*://", r"^ftp://"])
 def full_url(args):
-    """
-    Handle absolute URLs (HTTP, HTTPS, FTP) found during crawling.
+    parent_host = urlsplit(args['parent_url']).hostname
+    return [{
+        "url": args['url'],
+        "visited": False,
+        "source": "full_url",
+        "parent_host": parent_host,
+        "host": urlsplit(args['url']).hostname,
+        "random_bucket": random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }]
 
-    This function processes fully-qualified URLs that include a complete protocol
-    and domain. It extracts the parent host information and adds the URL to the
-    crawling database for future processing.
-
-    The function is registered to handle URLs matching these patterns:
-    - HTTP URLs: http://example.com/path
-    - HTTPS URLs: https://example.com/path
-    - FTP URLs: ftp://example.com/path
-
-    Args:
-        args (dict): Dictionary containing:
-            - 'url' (str): The absolute URL to process
-            - 'parent_url' (str): The URL of the page containing this link
-            - 'db': Database connection object for storing new URLs
-
-    Returns:
-        bool: Always returns True to indicate successful processing
-
-    Note:
-        URLs are marked as unvisited when added to the database. The parent_host
-        is extracted from the parent_url to track the source of discovered links,
-        which can be useful for crawling analytics and avoiding infinite loops.
-    """
-    parent_host = urlsplit(args['parent_url'])[1]
-    db_insert_if_new_url(url=args['url'], source="full_url", visited=False, parent_host=parent_host, db=args['db'])
-    return True
-
-
-@function_for_url(
-    [
-        r"^(mailto:|maillto:|maito:|mail:|malito:|mailton:|\"mailto:|emailto:|maltio:|mainto:|E\-mail:|mailtfo:|mailtp:|mailtop:|mailo:|mail to:|Email para:|email :|email:|E-mail: |mail-to:|maitlo:|mail.to:)"
-    ]
-)
+@function_for_url([r"^(mailto:|maillto:|maito:|mail:|malito:|mailton:|\"mailto:|emailto:|maltio:|mainto:|E\-mail:|mailtfo:|mailtp:|mailtop:|mailo:|mail to:|Email para:|email :|email:|E-mail: |mail-to:|maitlo:|mail.to:)"])
 def email_url(args):
-    """
-    Extract and validate email addresses from mailto links and similar email schemes.
-
-    This function processes URLs that contain email addresses using various mailto
-    schemes, including common misspellings and variations. It extracts the email
-    address, validates its format, and stores it in the database if valid.
-
-    The function handles numerous mailto variations including:
-    - Standard: mailto:, mail:, email:
-    - Common typos: maillto:, maito:, malito:, maltio:, etc.
-    - Multi-language: "Email para:", "E-mail:", etc.
-    - Malformed: mailton:, mailtfo:, mail.to:, etc.
-
-    Args:
-        args (dict): Dictionary containing:
-            - 'url' (str): The mailto URL to process
-            - 'parent_url' (str): The URL of the page containing this email link
-            - 'db': Database connection object for storing email data
-
-    Returns:
-        bool: True if a valid email address was found and stored, False otherwise
-
-    Process:
-        1. Uses regex to match and extract email schemes (case-insensitive)
-        2. Extracts the email address portion after the scheme
-        3. Validates email format using standard email regex pattern
-        4. If valid, stores the parent URL and email address in database
-        5. Returns success/failure status
-
-    Note:
-        Only stores emails that pass basic format validation. The parent_url
-        is stored rather than the mailto URL itself, as it represents the
-        source page where the email was found.
-    """
     address_search = re.search(
         r"^(mailto:|maillto:|maito:|mail:|malito:|mailton:|\"mailto:|emailto:|maltio:|mainto:|E\-mail:|mailtfo:|mailtp:|mailtop:|mailo:|mail to:|Email para:|email :|email:|E-mail: |mail-to:|maitlo:|mail.to:)(.*)",
         args['url'],
@@ -639,106 +364,56 @@ def email_url(args):
     )
     if address_search:
         address = address_search.group(2)
-        if re.search(
-            r"^([A-Za-z0-9]+[.-_])*[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{2,})+$",
-            address,
-        ):
-            parent_host = urlsplit(args['parent_url'])[1]
-            db_insert_if_new_url(
-                    url=args['parent_url'],
-                    email=address,
-                    source='email_url',
-                    parent_host=parent_host,
-                    db=args['db']
-                )
-            return True
-        else:
-            return False
-    else:
-        return False
+        if re.match(r"^([A-Za-z0-9]+[._-])*[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Za-z]{2,})+$", address):
+            parent_host = urlsplit(args['parent_url']).hostname
+            return [{
+                "url": args['parent_url']+'|'+address,
+                "emails": [address],
+                "visited": True,
+                "source": "email_url",
+                "parent_host": parent_host,
+                "host": parent_host,
+                "random_bucket": random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "isopendir": False
+            }]
+    return []
 
 
 def get_links(soup, content_url, db):
-    """
-    Extract and process all hyperlinks from a parsed HTML page.
-
-    This function finds all anchor tags (<a>) in the provided BeautifulSoup object,
-    extracts their href attributes, and processes each URL through the crawler's
-    URL handling system. It applies filtering based on allow/block lists and
-    routes URLs to appropriate handler functions.
-
-    Args:
-        soup (BeautifulSoup): Parsed HTML content containing anchor tags
-        content_url (str): The URL of the current page being processed
-        db: Database connection object for storing discovered URLs
-
-    Returns:
-        bool: Always returns True indicating successful processing
-
-    Process:
-        1. Finds all anchor tags in the HTML
-        2. Extracts and sanitizes href attributes
-        3. Handles relative URLs by using the current page's host
-        4. Applies host and URL filtering (allow/block lists)
-        5. Routes URLs through registered handler functions via url_functions
-        6. For unmatched URLs, prints debug info and optionally adds to database
-           if BE_GREEDY flag is enabled
-
-    Filtering:
-        - Skips non-string href values
-        - Applies host block/allow list filtering
-        - Applies URL-specific block list filtering
-        - Only processes URLs from allowed hosts
-
-    Note:
-        Contains commented code for extracting patterns from JavaScript,
-        which can be uncommented for additional link discovery from scripts.
-        The BE_GREEDY flag controls whether unmatched URLs are still added
-        to the crawling queue for potential future processing.
-    """
-    # If you want to grep some patterns, use the code below.
-    # pattern=r'"file":{".*?":"(.*?)"}'
-    # for script in soup.find_all('script',type="text/javascript"):
-    #    if re.search(pattern,str(script)):
-    #        print(re.search(pattern,str(script))[1])
     tags = soup("a")
-    for tag in tags:
-        url = tag.get("href", None)
+    bulk_data = []
 
+    for tag in tags:
+        url = tag.get("href")
         if not isinstance(url, str):
             continue
-        else:
-            url = sanitize_url(url)
-        found = False
-        host = urlsplit(url)[1]
-        # The block below ensures that if link takes to a internal directory
-        # of the server, it will use the original host
-        if host == '':
-            host = urlsplit(content_url)[1]
-        if (
-            not is_host_block_listed(host)
-            and is_host_allow_listed(host)
-            and not is_url_block_listed(url)
-        ):
-            for regex, function in url_functions:
-                m = regex.search(url)
-                if m:
-                    found = True
-                    function({'url': url, 'parent_url': content_url, 'db': db})
-                    continue
-            if not found:
-                out_url = urljoin(content_url, url)
-                print("Unexpected URL -{}- Ref -{}-".format(url, content_url))
-                print("Unexpected URL. Would this work? -{}-".format(out_url))
-                parent_host = urlsplit(content_url)[1]
-                if BE_GREEDY:
-                    db_insert_if_new_url(url=out_url,
-                                         source="get_links",
-                                         visited=False,
-                                         parent_host=parent_host,
-                                         db=db)
-    return True
+        url = sanitize_url(url)
+        host = urlsplit(url).hostname or urlsplit(content_url).hostname
+        if is_host_block_listed(host) or not is_host_allow_listed(host) or is_url_block_listed(url):
+            continue
 
+        # Collect URLs from all handlers
+        for regex, function in url_functions:
+            if regex.search(url):
+                results = function({'url': url, 'parent_url': content_url, 'db': db})
+                if results:
+                    bulk_data.extend(results)
+                break  # Only first matching handler
+
+    # Remove duplicates before insert
+    seen = set()
+    unique_bulk_data = []
+
+    for item in bulk_data:
+        url = item.get("url")
+        if not url:
+            continue  # skip items without a URL
+        if url not in seen:
+            unique_bulk_data.append(item)
+            seen.add(url)
+
+    bulk_insert_urls(unique_bulk_data, db, debug=False)
 
 def function_for_content_type(regexp_list):
     """
@@ -769,89 +444,6 @@ def function_for_content_type(regexp_list):
             content_type_functions.append((re.compile(regexp, flags=re.I | re.U), f))
         return f
     return get_content_type_function
-
-
-def get_directory_tree(url):
-    """
-    Generate a list of parent directory URLs from a given URL path.
-
-    This function creates URLs for all parent directories in the path hierarchy,
-    which is useful for directory traversal during web crawling. It builds URLs
-    by progressively removing path segments from the end, creating a breadcrumb
-    trail of parent directories.
-
-    Args:
-        url (str): The full URL to extract directory tree from
-                  (e.g., "https://example.com/path/to/file.html")
-
-    Returns:
-        list: List of parent directory URLs in descending order from immediate
-              parent to root directory
-
-    Process:
-        1. Extracts scheme and hostname (preserving port if present)
-        2. URL-decodes the path to handle encoded characters
-        3. Splits path into components using PurePosixPath
-        4. Iteratively removes trailing path segments to build parent URLs
-        5. Returns list of parent directory URLs
-
-    Note:
-        URLs are unquoted to handle percent-encoded paths correctly.
-        The function assumes POSIX-style paths with forward slashes.
-        Root directory and the original URL itself are not included in results.
-    """
-    # Host will have scheme, hostname and port
-    host = '://'.join(urlsplit(url)[:2])
-    dtree = []
-    for iter in range(1, len(PurePosixPath(unquote(urlparse(url).path)).parts[0:])):
-        dtree.append(str(host+'/'+'/'.join(PurePosixPath(unquote(urlparse(url).path)).parts[1:-iter])))
-    return dtree
-
-
-def insert_directory_tree(content_url, db):
-    """
-    Insert all parent directory URLs of a given URL into the crawling database.
-
-    This function generates and stores all parent directory URLs for potential
-    crawling, enabling directory traversal and discovery of additional content
-    that might not be linked from the current page. It's useful for exploring
-    web server directory structures systematically.
-
-    Args:
-        content_url (str): The source URL whose parent directories should be added
-                          (e.g., "https://example.com/docs/files/document.pdf")
-        db: Database connection object for storing URLs
-
-    Process:
-        1. Extracts the parent host from the source URL
-        2. Generates all parent directory URLs using get_directory_tree()
-        3. Sanitizes each directory URL
-        4. Inserts each directory URL into the database as unvisited
-        5. Marks all entries with source "insert_directory_tree" for tracking
-
-    Example:
-        For URL "https://site.com/blog/2023/posts/article.html", this will add:
-        - https://site.com/blog/2023/posts/
-        - https://site.com/blog/2023/
-        - https://site.com/blog/
-
-    Note:
-        All inserted URLs are marked as unvisited and will be processed by the
-        crawler in subsequent iterations. The parent_host is preserved to
-        maintain crawling context and enable proper filtering. Empty strings
-        are used for words and content_type since directories haven't been
-        crawled yet.
-    """
-    parent_host = urlsplit(content_url)[1]
-    for url in get_directory_tree(content_url):
-        url = sanitize_url(url)
-        db_insert_if_new_url(
-                url=url, words='',
-                content_type='',
-                visited=False,
-                source="insert_directory_tree",
-                parent_host=parent_host,
-                db=db)
 
 
 @function_for_content_type(content_type_html_regex)
@@ -1855,7 +1447,7 @@ def get_page(url, driver, db):
 
                     try:
                         content = decode(request.response.body, request.response.headers.get('Content-Encoding', 'identity'))
-                    except ValueError as e:  # 🛠️ Catch specific Brotli decompression failure
+                    except ValueError as e:  # Catch specific Brotli decompression failure
                         if "BrotliDecompress failed" in str(e):
                             db_insert_if_new_url(
                                     url=url,
@@ -1929,22 +1521,6 @@ def get_page(url, driver, db):
                                 )
                         if not found:
                             print(f"UNKNOWN type -{url}- -{content_type}-")
-        # force update on main url
-        db_insert_if_new_url(
-                url=url,
-                visited=True,
-                source='get_page.end',
-                parent_host=parent_host,
-                db=db
-            )
-    # force update on main url
-    db_insert_if_new_url(
-            url=original_url,
-            visited=True,
-            source='get_page.end.original',
-            parent_host=parent_host,
-            db=db
-        )
 
 
 class TimeoutException(Exception):
@@ -2073,8 +1649,6 @@ def crawler(db):
                     print('    {}'.format(target_url['url']))
                     del driver.requests
                     get_page(target_url['url'], driver, db)
-                    if HUNT_OPEN_DIRECTORIES:
-                        insert_directory_tree(target_url['url'], db)
                 except UnicodeEncodeError:
                     pass
         driver.quit()
@@ -2093,7 +1667,7 @@ def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
     # Default weights if none provided
     if METHOD_WEIGHTS is None:
         method_weights = {
-            "web_search":   0,
+            "web_search":   100,
             "fewest_urls":  1,
             "less_visited": 2,
             "oldest":       2,
@@ -2133,19 +1707,12 @@ def get_random_unvisited_domains(db, size=RANDOM_SITES_QUEUE):
         print(f'Selected method: \033[32m{chosen_method}\033[0m')
         return method_functions[chosen_method]()
 
-    except NotFoundError as e:
-        if "index_not_found_exception" in str(e):
-            print("Elasticsearch index missing. Creating now...")
-            db_create_database(INITIAL_URL, db=db)
-            return []
-        return []
     except RequestError as e:
         print("Elasticsearch request error:", e)
         return []
     except Exception as e:
         print(f"Unhandled error in get_random_unvisited_domains: {e}")
         return []
-
 
 def get_urls_from_web_search():
     urls = []
@@ -2196,7 +1763,7 @@ def get_least_covered_random_hosts(db, size=100):
         }
     }
 
-    agg_response = db.con.search(index=URLS_INDEX, body=agg_query)
+    agg_response = db.con.search(index=log_index_pattern, body=agg_query)
     buckets = agg_response.get("aggregations", {}).get("hosts", {}).get("buckets", [])
     hosts = [bucket["key"] for bucket in buckets]
     for bucket in buckets:
@@ -2241,7 +1808,7 @@ def get_least_covered_random_hosts(db, size=100):
             ]
         }
 
-        response = db.con.search(index=URLS_INDEX, body=query)
+        response = db.con.search(index=log_index_pattern, body=query)
         hits = response.get("hits", {}).get("hits", [])
         if hits:
             results.append({
@@ -2301,7 +1868,7 @@ def get_urls_from_least_visited_hosts(db, size=100):
         "_source": ["host"]
     }
 
-    response = db.con.search(index=URLS_INDEX, body=query_body)
+    response = db.con.search(index=log_index_pattern, body=query_body)
     results = response.get('hits', {}).get('hits', [])
     for result in results:
         print('    \033[35m{} \t {}\033[0m'.format(result['_score'], result['_source']['host']))
@@ -2343,7 +1910,7 @@ def get_oldest_unvisited_urls_from_bucket(db, size=100):
         ]
     }
 
-    response = db.con.search(index=URLS_INDEX, body=query_body)
+    response = db.con.search(index=log_index_pattern, body=query_body)
     hits = response.get('hits', {}).get('hits', [])
     if hits:
         for hit in hits:
@@ -2403,7 +1970,7 @@ def get_urls_by_random_bucket_and_host_prefix(db, size=100):
         },
         "_source": ["host"]
     }
-    response = db.con.search(index=URLS_INDEX, body=query_body)
+    response = db.con.search(index=log_index_pattern, body=query_body)
     results = response.get('hits', {}).get('hits', [])
     if results:
         urls = [{
@@ -2455,7 +2022,7 @@ def get_random_host_domains(db, size=100):
         }
     }
 
-    response = db.con.search(index=URLS_INDEX, body=query_body)
+    response = db.con.search(index=log_index_pattern, body=query_body)
     results = response.get('hits', {}).get('hits', [])
 
     if results:
@@ -2475,7 +2042,7 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
     try:
         head_resp = requests.head(url, timeout=(10, 10), allow_redirects=True, verify=False, headers=headers)
     except Exception as e:
-        db_insert_if_new_url(url=url, visited=True, words='', min_webcontent='', raw_webcontent='',
+        db_insert_if_new_url(url=url, visited=False, words='', min_webcontent='', raw_webcontent='', fast_crawled=True,
                              source='fast_extension_crawler.head.exception', db=db)
         return
 
@@ -2488,22 +2055,19 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
     content_type = head_resp.headers.get("Content-Type", "")
     if not content_type:
         print(f"[FAST CRAWLER] No content type found for {url}")
-        mark_url_as_fast_crawled(url, db)
+        mark_url_as_fast_crawled_visited(url, db)
         return
 
     content_type = content_type.lower().split(";")[0].strip()
     if not any(re.match(pattern, content_type) for pattern in content_type_patterns):
         print(f"[FAST CRAWLER] Mismatch content type for {url}, got: {content_type}")
-        mark_url_as_fast_crawled(url, db)
+        mark_url_as_fast_crawled_visited(url, db)
         return
 
     try:
         host = urlparse(url).hostname or ""
         if is_host_block_listed(host) or not is_host_allow_listed(host) or is_url_block_listed(url):
             return
-
-        if HUNT_OPEN_DIRECTORIES:
-            insert_directory_tree(url, db)
 
         found = False
         for regex, function in content_type_functions:
@@ -2554,13 +2118,18 @@ def fast_extension_crawler(url, extension, content_type_patterns, db):
 
 
 def run_fast_extension_pass(db, max_workers=MAX_FAST_WORKERS):
+    print('Housekeeping top duplicated in logs.')
+    housekeeping_duplicated_in_logs_top(db)
+    print('Housekeeping duplicated in logs.')
+    housekeeping_duplicated_in_logs_agg(db)
+    print('Housekeeping logs that are already in master.')
+    housekeeping_already_in_master(db)
     shuffled_extensions = list(EXTENSION_MAP.items())
     random.shuffle(shuffled_extensions)
 
     for extension, content_type_patterns in shuffled_extensions:
         buckets = list(range(ELASTICSEARCH_RANDOM_BUCKETS))
         random.shuffle(buckets)
-
         for random_bucket in buckets:
             time.sleep(FAST_DELAY)
             print(f"[FAST CRAWLER] Extension: {extension} | Bucket: \033[33m{random_bucket}\033[0m")
@@ -2578,7 +2147,7 @@ def run_fast_extension_pass(db, max_workers=MAX_FAST_WORKERS):
                 }
             }
             try:
-                result = db.es.search(index=URLS_INDEX, query=query, size=10000)
+                result = db.es.search(index=log_index_pattern, query=query, size=10000)
                 urls = result.get("hits", {}).get("hits", [])
 
                 if not urls:
@@ -2616,7 +2185,7 @@ def remove_invalid_urls(db):
     deleted = 0
     query = {"query": {"match_all": {}}}
 
-    for doc in helpers.scan(db.es, index=URLS_INDEX, query=query):
+    for doc in helpers.scan(db.es, index=log_index_pattern, query=query):
         url = doc['_source'].get('url')
         if not url:
             continue
@@ -2629,14 +2198,14 @@ def remove_invalid_urls(db):
         if pre_url != url:
             print(f"Deleted sanitized URL: -{pre_url}- inserting -{url}-")
             db_insert_if_new_url(url=url, visited=False, source="remove_invalid_urls", db=db)
-            db.es.delete(index=URLS_INDEX, id=doc['_id'])
+            db.es.delete(index=doc['_index'], id=doc['_id'])
             deleted += 1
             continue
 
         # Remove if completely missing a scheme (e.g., "www.example.com")
         if not parsed.scheme:
             print(f"Deleted URL with no scheme: -{url}-")
-            db.es.delete(index=URLS_INDEX, id=doc['_id'])
+            db.es.delete(index=doc['_index'], id=doc['_id'])
             deleted += 1
 
     print(f"\nDone. Total invalid URLs deleted: {deleted}")
@@ -2644,25 +2213,24 @@ def remove_invalid_urls(db):
 
 def remove_blocked_hosts_from_es_db(db):
     compiled_blocklist = [re.compile(pattern) for pattern in HOST_REGEX_BLOCK_LIST]
-
+            
     def is_blocked(host):
         return any(regex.search(host) for regex in compiled_blocklist)
+
     deleted = 0
     query = {"query": {"match_all": {}}}
-    try:
-        for doc in helpers.scan(db.es, index=URLS_INDEX, query=query):
-            url = doc['_source'].get('url')
-            if not url:
-                continue
-            host = urlsplit(url).hostname or ''
-            if is_blocked(host):
-                db.es.delete(index=URLS_INDEX, id=doc['_id'])
-                print(f"Deleted: {url}")
-                deleted += 1
-    except NotFoundError as e:
-        if "index_not_found_exception" in str(e):
-            print("Elasticsearch index missing. Creating now...")
-            db_create_database(INITIAL_URL, db=db)
+
+    for doc in helpers.scan(db.es, index=log_index_pattern, query=query):
+        url = doc['_source'].get('url')
+        if not url:
+            continue
+
+        host = urlsplit(url).hostname or ''
+        if is_blocked(host):
+            db.es.delete(index=doc['_index'], id=doc['_id'])  
+            print(f"Deleted: {url} (from {doc['_index']})")
+            deleted += 1
+
     print(f"\nDone. Total deleted: {deleted}")
 
 
@@ -2675,20 +2243,15 @@ def remove_blocked_urls_from_es_db(db):
 
     deleted = 0
     query = {"query": {"match_all": {}}}
-    try:
-        for doc in helpers.scan(db.es, index=URLS_INDEX, query=query):
-            url = doc['_source'].get('url')
-            if not url:
-                continue
-            path = urlsplit(url).path or ''
-            if is_blocked_path(path):
-                db.es.delete(index=URLS_INDEX, id=doc['_id'])
-                print(f"Deleted by path: {url}")
-                deleted += 1
-    except NotFoundError as e:
-        if "index_not_found_exception" in str(e):
-            print("Elasticsearch index missing. Creating now...")
-            db_create_database(INITIAL_URL, db=db)
+    for doc in helpers.scan(db.es, index=log_index_pattern, query=query):
+        url = doc['_source'].get('url')
+        if not url:
+            continue
+        path = urlsplit(url).path or ''
+        if is_blocked_path(path):
+            db.es.delete(index=doc['_index'], id=doc['_id'])
+            print(f"Deleted by path: {url}")
+            deleted += 1
     print(f"\nDone. Total deleted by path: {deleted}")
 
 
@@ -2791,8 +2354,6 @@ def process_input_url_files(db):
                 print('    [FILE] {}'.format(url))
                 del driver.requests
                 get_page(url, driver, db)
-                if HUNT_OPEN_DIRECTORIES:
-                    insert_directory_tree(url, db)
             except Exception as e:
                 print(f"Error crawling {url}: {e}")
         driver.quit()
@@ -2808,6 +2369,7 @@ def process_input_url_files(db):
 def main():
     instance = get_instance_number()
     db = DatabaseConnection()
+    db_create_database(db=db)
     if instance == 1:
         print("Instance 1: Running HTTPS webserver to embed http site for compatibility with selenium-wire.")
         # Run HTTPS in a background thread to avoid blocking the crawler
@@ -2828,14 +2390,14 @@ def main():
         print("Instance 1: Let's go full crawler mode.")
         crawler(db)
     elif instance == 2:
-        print("Instance 2: Running fast extension pass only. Not everything needs selenium... running requests in urls that looks like files.")
+        print("Instance 2: Running fast extension pass only. Not everything needs selenium. Running requests in urls that looks like files, but first, housekeeping...")
         run_fast_extension_pass(db)
-    #elif instance == 3:
-    #    print("Instance 3: Scanning IPs in some unconventional ports and protocols combinations.")
-    #    try:
-    #        subprocess.run(["venv/bin/python3", "scanner.py"], check=True)
-    #    except subprocess.CalledProcessError as e:
-    #        print(f"Error while running scanner.py: {e}")
+    elif instance == 3 and RUN_IP_SCANNER:
+        print("Instance 3: Scanning IPs in some unconventional ports and protocols combinations.")
+        try:
+            subprocess.run(["venv/bin/python3", "scanner.py"], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error while running scanner.py: {e}")
     else:
         print(f"Instance {instance}: Running full crawler.")
         crawler(db)

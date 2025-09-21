@@ -16,13 +16,13 @@ MAX_URLS_FROM_FILE = 100
 # -------------------------------------------
 
 # The hostname or IP address of the Elasticsearch server
-ELASTICSEARCH_HOST = '192.168.1.1'
+ELASTICSEARCH_HOST = '10.10.10.10'
 
 # The port Elasticsearch is listening on (typically 9200 for HTTP/HTTPS)
 ELASTICSEARCH_PORT = 9200
 
 # Username for basic authentication
-ELASTICSEARCH_USER = 'elastic'
+ELASTICSEARCH_USER = 'youruser'
 
 # Password for basic authentication
 ELASTICSEARCH_PASSWORD = 'yourpassword'
@@ -54,8 +54,9 @@ ELASTICSEARCH_VERIFY_CERTS = False
 # In order to avoid multiple workers on the same url
 ELASTICSEARCH_RANDOM_BUCKETS = 20
 
-# Name of the index where data will be stored
-URLS_INDEX = 'crawler'
+# Name of the indexes where data will be stored
+MASTER_URLS_INDEX = 'crawler-master'
+LOGS_URLS_INDEX_PREFIX = 'crawler-logs'
 
 
 # -------------------------------------------
@@ -85,13 +86,13 @@ FORCE_IMAGE_LOAD = False
 # This option only makes sense to be activated when you have an external
 # script packing data to database, since all crawler data is already
 # filtered while urls are entering.
-REMOVE_INVALID_URLS = False
+REMOVE_INVALID_URLS = True
 
 # If urls that are blocked based on host should be removed from the database.
-REMOVE_BLOCKED_HOSTS = False
+REMOVE_BLOCKED_HOSTS = True
 
 # If urls that are blocked based on path should be deleted from the database.
-REMOVE_BLOCKED_URLS = False
+REMOVE_BLOCKED_URLS = True
 
 # How long will it  wait until consider the url is not responding
 # This will deal with pages asking for basic authentication, and
@@ -141,7 +142,7 @@ COMPRESSEDS_FOLDER = 'compressed'
 CATEGORIZE_NSFW = False
 NSFW_MIN_PROBABILITY = .78
 # Minimum number of pixels an image should have in order to be evaluated
-MIN_NSFW_RES = 64 * 64
+MIN_NSFW_RES = 128 * 128
 DOWNLOAD_NSFW = False
 NSFW_FOLDER = 'images/nsfw'
 DOWNLOAD_SFW = False
@@ -167,7 +168,7 @@ FAST_RANDOM_MAX_WAIT = 0
 MAX_SCANNER_WORKERS = 1
 
 # Delay between fast buckets. Used to decrease the elastic search access.
-FAST_DELAY = 20
+FAST_DELAY = 1
 
 # Word extraction
 EXTRACT_WORDS = True
@@ -187,7 +188,7 @@ MAX_DIR_LEVELS = 7
 MAX_HOST_LEVELS = 7
 
 # If we should or not save full html to the database
-EXTRACT_RAW_WEBCONTENT = True
+EXTRACT_RAW_WEBCONTENT = False
 # If we should or not save rendered text page to the database
 EXTRACT_MIN_WEBCONTENT = True
 
@@ -196,18 +197,14 @@ MAX_WEBCONTENT_SIZE = 900000
 
 # search words will be randomly chosen, web searched and crawled
 SEARCH_WORDS = [
-    "Conan", "Barbarian", "Cimmeria", "Hyborian Age", "Robert E. Howard",
+    "Firestarter", "Breathe",
 ]
-
-# be_greedy = True - Save urls to database that might not work,
-# since have not matched any regex.
-BE_GREEDY = False
 
 # Do not crawl these domains.
 HOST_REGEX_BLOCK_LIST = [
     r'localhost:4443$',
+    r'(^|\.)spotify.com$',
     r'(^|\.)google$',
-    r'(^|\.)google\.com$',
 ]
 
 # Do not crawl urls that match any of these regexes
@@ -222,13 +219,15 @@ HOST_REGEX_ALLOW_LIST = [r'.*']
 
 # A weight for every method of url picking
 METHOD_WEIGHTS = {
-    "web_search":   1,
+    "web_search":   0,
     "fewest_urls":  1,
     "less_visited": 1,
-    "oldest":       2,
+    "oldest":       1,
     "host_prefix":  1,
     "random":       1
 }
+
+RUN_IP_SCANNER = False
 
 # Scanner options
 SERVICES_INVENTORY = "/usr/share/nmap/nmap-services"
@@ -253,3 +252,8 @@ NOSCAN_NETWORKS = [
     "100.64.0.0/10",
     "169.254.0.0/16"
 ]
+
+# Housekeeping
+MASTER_ALREADY_IN_LOGS_BATCH = 5000
+DUPLICATED_IN_LOGS_BATCH = 5000
+

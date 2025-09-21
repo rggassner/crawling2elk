@@ -1,37 +1,26 @@
-# 🕷️ Smart Crawler with NSFW Detection, Elasticsearch Integration & Link Intelligence
+# Crawler with NSFW Detection, Elasticsearch Integration 
 
 This is a modular, scalable web crawling framework built for advanced scraping, data enrichment, and media classification. It features built-in support for:
 
--   ✅ Open directory detection
+-    Open directory detection
     
--   🔍 Advanced URL pattern handling and filtering
+-    Advanced URL pattern handling and filtering
     
--   🧠 NSFW content detection using `opennsfw2`
+-    NSFW content detection using `opennsfw2`
     
--   🧱 Elasticsearch integration for scalable storage and analysis
+-    Elasticsearch integration for scalable storage and analysis
     
--   🦾 Selenium with stealth via `selenium-wire` and `fake-useragent`
+-    Selenium with stealth via `selenium-wire` and `fake-useragent`
     
--   🧠 Word extraction for keyword indexing
+-    Word extraction for keyword indexing
     
--   🔗 Email harvesting
+-    Email harvesting
     
--   📂 URL de-duplication, allow/block listing, and intelligent path handling
-    
+-    URL de-duplication, allow/block listing, and intelligent path handling
 
-* * *
+-    **Smart link discovery** – supports relative/absolute URL normalization and classification.
 
-## 🚀 Features
-
--   **Smart link discovery** – supports relative/absolute URL normalization and classification.
-    
--   **Open Directory Detection** – detects classic index pages.
-    
--   **NSFW Classifier** – classifies images using `opennsfw2` model.
-    
--   **Email Scraper** – detects and stores emails.
-    
--   **Elasticsearch-backed** – stores and updates URL metadata, deduplicated using a SHA-256 hash.
+-    **Email Scraper** – detects and stores emails.
     
 -   **Pluggable Architecture** – easily extend with new URL handlers using decorators.
     
@@ -39,43 +28,14 @@ This is a modular, scalable web crawling framework built for advanced scraping, 
     
 -   **Configurable via `config.py`** – fully customizable logic and thresholds.
 
--   **Real-Time SSL Certificate Generation**  
-    Automatically generates a self-signed SSL certificate for secure local web interfaces.
+-   **Real-Time SSL Certificate Generation** - Automatically generates a self-signed SSL certificate for secure local web interfaces.
     
--   **Advanced Elasticsearch Queries**  
-    Retrieves detailed analytics from the data stored in Elasticsearch, such as:
-    
-    -   Total number of indexed URLs
-        
-    -   Number of unique domains
-        
-    -   Number of visited pages
-        
-    -   Most common content types
-        
-    -   Number of unique emails extracted
-        
-    -   NSFW detection and domain classification
-        
-    -   Open directory listings
-        
--   **Dynamic Network Visualization**  
-    Generates a `network.json` and `network.html` file to create a live, interactive **force-directed graph** of the relationships between domains (parent/child hosts). This graph is automatically refreshed every few seconds and features a toggle to pause/resume updates.
-    
--   **Pornographic Domain Detection**  
-    Identifies domains with a high percentage of NSFW content based on image analysis results (e.g., using `isnsfw` field and resolution thresholds).
-    
--   **Open Directory Index Finder**  
-    Lists URLs identified as open directories, which can be useful in security audits or recon work.
-    
--   **Domain Relation Extraction**  
-    Extracts host relationships (e.g., parent-child domain links) for graph building and dependency analysis.
-
+-   **Domain Relation Extraction** - Extracts host relationships (e.g., parent-child domain links) for graph building and dependency analysis.
 
 
 * * *
 
-## 🧱 Requirements
+##  Requirements
 
 You’ll need the following installed:
 
@@ -106,7 +66,7 @@ Install dependencies:
 
 * * *
 
-## 🛠️ Configuration
+## Configuration
 
 All tunables live in `config.py`:
 
@@ -121,7 +81,7 @@ All tunables live in `config.py`:
 
 * * *
 
-## 📚 Function Highlights
+## Function Highlights
 
 -   `db_insert_if_new_url()` – inserts URL if new or updates with `visited`, NSFW status, resolution, etc.
     
@@ -138,7 +98,7 @@ All tunables live in `config.py`:
 
 * * *
 
-## 🧩 Extending the Engine
+## Extending the Engine
 
 Add your own URL handler like this:
 
@@ -149,7 +109,7 @@ This makes the engine modular and powerful for specialized scraping and analysis
 
 * * *
 
-## 🔒 Notes
+## Notes
 
 -   URLs are hashed with SHA-256 to use as Elasticsearch document IDs.
     
@@ -173,7 +133,7 @@ This makes the engine modular and powerful for specialized scraping and analysis
 
 * * *
 
-## 💬 Author Notes
+##  Author Notes
 
 Built for performance, flexibility, and stealth. Use responsibly.
 

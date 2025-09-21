@@ -5,12 +5,14 @@ import random
 import re
 import string
 import time
+from pathlib import PurePosixPath
 from config import *
 from datetime import datetime, timezone
 from elasticsearch import NotFoundError, RequestError, Elasticsearch
 from elasticsearch import ConflictError
 from elasticsearch.exceptions import NotFoundError, RequestError
-from urllib.parse import urlsplit, urlunsplit, unquote, parse_qs
+from elasticsearch import helpers
+from urllib.parse import urlsplit, urlunsplit, unquote, parse_qs, urlparse
 
 
 # Class for managing a connection to an Elasticsearch cluster
@@ -64,6 +66,259 @@ class DatabaseConnection:
     def scroll(self, *args, **kwargs):
         # Wrapper for the `scroll` API, used for paginating large result sets
         return self.es.scroll(*args, **kwargs)
+
+def housekeeping_duplicated_in_logs_top(db, top_n=100, batch_size=DUPLICATED_IN_LOGS_BATCH):
+    """
+    Remove duplicate URLs in crawler-logs-* by focusing on top N most repeated URLs.
+    Keep only 1 doc per URL, preferring one with 'fast_crawled'.
+    Loops until the highest duplicate count <= 2.
+    """
+    index_pattern = LOGS_URLS_INDEX_PREFIX + "-*"
+    deleted_total = 0
+
+    while True:
+        # Step 1: Get top N URLs by doc count
+        agg_query = {
+            "size": 0,
+            "aggs": {
+                "top_urls": {
+                    "terms": {
+                        "field": "url",
+                        "size": top_n,
+                        "order": {"_count": "desc"}
+                    },
+                    "aggs": {
+                        "dupes": {
+                            "top_hits": {"size": 99}  # fetch all duplicates per URL
+                        }
+                    }
+                }
+            }
+        }
+
+        resp = db.es.search(index=index_pattern, body=agg_query)
+        buckets = resp["aggregations"]["top_urls"]["buckets"]
+
+        if not buckets:
+            print("No duplicates found.")
+            break
+
+        highest_count = buckets[0]["doc_count"]
+        if highest_count <= 2:  # stop condition
+            print(f"Highest duplicate count: {highest_count}, stopping cleanup.")
+            break
+
+        buffer = []
+
+        for bucket in buckets:
+            hits = bucket["dupes"]["hits"]["hits"]
+
+            # Pick doc to keep (prefer fast_crawled)
+            keep = None
+            for h in hits:
+                if h["_source"].get("fast_crawled"):
+                    keep = h
+                    break
+            if not keep:
+                keep = hits[0]
+
+            # Queue all other docs for deletion
+            for h in hits:
+                if h["_id"] != keep["_id"]:
+                    buffer.append({
+                        "_op_type": "delete",
+                        "_index": h["_index"],
+                        "_id": h["_id"],
+                        "ignore": 404  # ignore already-deleted docs
+                    })
+
+            # Flush in batches
+            if len(buffer) >= batch_size:
+                success, failed = helpers.bulk(db.es, buffer, stats_only=True, raise_on_error=False)
+                deleted_total += success
+                print(f"Deleted {success} dupes in this pass (running total {deleted_total}), failed {failed}")
+                buffer.clear()
+
+                # Force refresh so next query sees updated state
+                db.es.indices.refresh(index=index_pattern)
+
+        # Flush remaining
+        if buffer:
+            success, failed = helpers.bulk(db.es, buffer, stats_only=True, raise_on_error=False)
+            deleted_total += success
+            print(f"Deleted {success} dupes in this pass (running total {deleted_total}), failed {failed}")
+            buffer.clear()
+
+            # Force refresh
+            db.es.indices.refresh(index=index_pattern)
+
+        print(f"Highest duplicate count: {highest_count}")
+
+    print(f"\nDone. Total duplicates deleted: {deleted_total}")
+
+
+def housekeeping_already_in_master(db, batch_size=MASTER_ALREADY_IN_LOGS_BATCH, page_size=MASTER_ALREADY_IN_LOGS_BATCH):
+    """
+    Remove from crawler-logs-* any URLs that already exist in crawler-master.
+    Uses composite aggregation to paginate over URL buckets for efficiency.
+    Deletes in bulk.
+    """
+    logs_index_pattern = LOGS_URLS_INDEX_PREFIX + "-*"
+    master_index = "crawler-master"
+    deleted_total = 0
+    after_key = None
+
+    while True:
+        # Composite aggregation to get URLs in logs
+        query = {
+            "size": 0,
+            "aggs": {
+                "by_url": {
+                    "composite": {
+                        "size": page_size,
+                        "sources": [
+                            {"url": {"terms": {"field": "url"}}}  # use keyword for aggregation
+                        ]
+                    },
+                    "aggs": {
+                        "hits_in_logs": {"top_hits": {"size": 50}}  # get up to 50 docs per URL
+                    }
+                }
+            }
+        }
+
+        if after_key:
+            query["aggs"]["by_url"]["composite"]["after"] = after_key
+
+        resp = db.es.search(index=logs_index_pattern, body=query)
+        buckets = resp["aggregations"]["by_url"]["buckets"]
+        if not buckets:
+            break
+
+        buffer = []
+        for bucket in buckets:
+            url = bucket["key"]["url"]
+
+            # Check if URL exists in master
+            exists = db.es.search(
+                index=master_index,
+                size=1,
+                query={"term": {"url": url}}
+            )
+            if exists["hits"]["total"]["value"] == 0:
+                continue  # skip, not in master
+
+            # Add all logs docs for this URL to delete buffer
+            for hit in bucket["hits_in_logs"]["hits"]["hits"]:
+                buffer.append({
+                    "_op_type": "delete",
+                    "_index": hit["_index"],
+                    "_id": hit["_id"]
+                })
+
+            # Flush buffer if it reaches batch size
+            if len(buffer) >= batch_size:
+                success, failed = helpers.bulk(db.es, buffer, stats_only=True)
+                deleted_total += success
+                print(f"Deleted {success} logs already in master (running total {deleted_total}), failed {failed}")
+                buffer.clear()
+
+        # Flush remaining
+        if buffer:
+            success, failed = helpers.bulk(db.es, buffer, stats_only=True)
+            deleted_total += success
+            print(f"Deleted {success} logs already in master (running total {deleted_total}), failed {failed}")
+            buffer.clear()
+
+        # Pagination: get next after_key
+        after_key = resp["aggregations"]["by_url"].get("after_key")
+        if not after_key:
+            break
+
+    print(f"\nDone. Total deleted: {deleted_total}")
+
+
+def housekeeping_duplicated_in_logs_agg(db, batch_size=DUPLICATED_IN_LOGS_BATCH, page_size=DUPLICATED_IN_LOGS_BATCH):
+    """
+    Remove duplicate URLs in crawler-logs-*.
+    Keep only 1 doc per URL, preferring the one with 'fast_crawled'.
+    Uses composite aggregation to paginate over all buckets.
+    """
+    index_pattern = LOGS_URLS_INDEX_PREFIX + "-*"
+    deleted_total = 0
+    after_key = None
+
+    while True:
+        # Composite aggregation (paginated terms agg)
+        query = {
+            "size": 0,
+            "aggs": {
+                "by_url": {
+                    "composite": {
+                        "size": page_size,
+                        "sources": [
+                            {"url": {"terms": {"field": "url"}}}  # ensure keyword
+                        ]
+                    },
+                    "aggs": {
+                        "dupes": {"top_hits": {"size": 50}}  # fetch up to 50 docs per URL bucket
+                    }
+                }
+            }
+        }
+
+        if after_key:
+            query["aggs"]["by_url"]["composite"]["after"] = after_key
+
+        resp = db.es.search(index=index_pattern, body=query)
+
+        buckets = resp["aggregations"]["by_url"]["buckets"]
+        if not buckets:
+            break
+
+        buffer = []
+        for bucket in buckets:
+            hits = bucket["dupes"]["hits"]["hits"]
+
+            # Pick doc to keep (prefer one with fast_crawled)
+            keep = None
+            for h in hits:
+                if "fast_crawled" in h["_source"] and h["_source"]["fast_crawled"]:
+                    keep = h
+                    break
+            if not keep:
+                keep = hits[0]
+
+            # Delete all others
+            for h in hits:
+                if h["_id"] != keep["_id"]:
+                    buffer.append({
+                        "_op_type": "delete",
+                        "_index": h["_index"],
+                        "_id": h["_id"]
+                    })
+
+            # Flush deletes in batches
+            if len(buffer) >= batch_size:
+                success, failed = helpers.bulk(db.es, buffer, stats_only=True)
+                deleted_total += success
+                print(f"Deleted {success} dupes (running total {deleted_total}), failed {failed}")
+                buffer.clear()
+
+        # Flush remaining before next page
+        if buffer:
+            success, failed = helpers.bulk(db.es, buffer, stats_only=True)
+            deleted_total += success
+            print(f"Deleted {success} dupes (running total {deleted_total}), failed {failed}")
+            buffer.clear()
+
+        # Pagination: get after_key for next loop
+        after_key = resp["aggregations"]["by_url"].get("after_key")
+        if not after_key:
+            break
+
+    print(f"\nDone. Total duplicates deleted: {deleted_total}")
+
 
 
 def sanitize_url(
@@ -297,92 +552,389 @@ def remove_jsessionid_with_semicolon(url):
     cleaned_url = re.sub(pattern, '', url)
     return cleaned_url
 
-
-def db_create_database(initial_url, db):
+def db_create_database(db=None):
     """
-    Create the Elasticsearch index structure used for storing crawled URLs,
-    and insert the initial seed URL if the index does not already exist.
-
-    This function defines the mapping (schema) for the `URLS_INDEX`, which includes
-    various metadata fields used during web crawling such as directory levels,
-    content type, whether the URL has been visited, open directory indicators, etc.
-
-    It creates the index if it doesn't already exist, and inserts the initial URL
-    as the first entry to kick off crawling.
-
-    Args:
-        initial_url (str): The initial URL to insert into the database.
-        db (object): A database wrapper that provides access to the Elasticsearch client
-                     (via `db.con`) and helper functions like `db_insert_if_new_url`.
-
-    Returns:
-        bool: True if the index was created or already existed and the insertion was attempted successfully,
-              False if there was an error during index creation or document insertion.
+    Ensure Elasticsearch indices exist:
+    - Master index (deduplicated, upserts)
+    - Current monthly log index (append-only)
     """
-    print("Creating Elasticsearch index structure.")
-    now_iso = datetime.now(timezone.utc).isoformat()
+    if db is None or db.con is None:
+        raise ValueError("db connection is required")
 
-    # Define mappings for the URLS_INDEX
-    urls_mapping = {
+    # ---------------------------------------
+    # Master index
+    # ---------------------------------------
+    if not db.con.indices.exists(index=MASTER_URLS_INDEX):
+        master_mapping = {
+            "mappings": {
+                "properties": {
+                    "url": {"type": "keyword"},
+                    "visited": {"type": "boolean"},
+                    "fast_crawled": {"type": "boolean"},
+                    "isopendir": {"type": "boolean"},
+                    "isnsfw": {"type": "float"},
+                    "content_type": {"type": "keyword"},
+                    "source": {"type": "keyword"},
+                    "words": {"type": "keyword"},
+                    "host": {"type": "keyword"},
+                    "parent_host": {"type": "keyword"},
+                    "host_levels": {"type": "keyword"},
+                    "directory_levels": {"type": "keyword"},
+                    "file_extension": {"type": "keyword"},
+                    "has_query": {"type": "boolean"},
+                    "query_variables": {"type": "keyword"},
+                    "query_values": {"type": "keyword"},
+                    # Dynamically add keyword fields for directory level depth
+                    **{
+                        f"directory_level_{i+1}": {"type": "keyword"}
+                        for i in range(MAX_DIR_LEVELS)
+                    },
+                    # Dynamically add keyword fields for host level depth
+                    **{
+                        f"host_level_{i+1}": {"type": "keyword"}
+                        for i in range(MAX_HOST_LEVELS)
+                    },
+                    "emails": {"type": "keyword"},
+                    "resolution": {"type": "integer"},
+                    "random_bucket": {"type": "integer"},
+                    "created_at": {"type": "date"},
+                    "updated_at": {"type": "date"},
+                    "opendir_category": {"type": "keyword"},
+                    "min_webcontent": {"type": "text"},
+                    "raw_webcontent": {"type": "text"}                    
+                }
+            }
+        }
+        db.con.indices.create(index=MASTER_URLS_INDEX, body=master_mapping)
+        print(f"[INIT] Created master index: {MASTER_URLS_INDEX}")
+
+    # ---------------------------------------
+    # Current monthly log index
+    # ---------------------------------------
+    log_index = get_monthly_log_index()
+    if not db.con.indices.exists(index=log_index):
+        create_log_index(db, log_index)
+
+    db_insert_if_new_url(
+        url=INITIAL_URL,
+        source='db_create_database',
+        parent_host=urlsplit(INITIAL_URL)[1],
+        db=db
+    )
+    print("Inserted initial url {}.".format(INITIAL_URL))
+        
+
+def create_log_index(db, log_index):
+    """Helper to create a log index with the correct mapping"""
+    log_mapping = {
         "mappings": {
             "properties": {
                 "url": {"type": "keyword"},
+                "host": {"type": "keyword"},
                 "visited": {"type": "boolean"},
                 "fast_crawled": {"type": "boolean"},
-                "isopendir": {"type": "boolean"},
-                "isnsfw": {"type": "float"},
-                "content_type": {"type": "keyword"},
                 "source": {"type": "keyword"},
-                "words": {"type": "keyword"},
-                "host": {"type": "keyword"},
                 "parent_host": {"type": "keyword"},
-                "host_levels": {"type": "keyword"},
-                "directory_levels": {"type": "keyword"},
-                "file_extension": {"type": "keyword"},
+                "emails": {"type": "keyword"},
                 "has_query": {"type": "boolean"},
                 "query_variables": {"type": "keyword"},
                 "query_values": {"type": "keyword"},
-                # Dynamically add keyword fields for directory level depth
-                **{
-                    f"directory_level_{i+1}": {"type": "keyword"}
-                    for i in range(MAX_DIR_LEVELS)
-                },
-                # Dynamically add keyword fields for host level depth
-                **{
-                    f"host_level_{i+1}": {"type": "keyword"}
-                    for i in range(MAX_HOST_LEVELS)
-                },
-                "emails": {"type": "keyword"},
-                "resolution": {"type": "integer"},
-                "random_bucket": {"type": "integer"},
-                "created_at": {"type": "date"},
-                "updated_at": {"type": "date"},
-                "opendir_category": {"type": "keyword"},
-                "min_webcontent": {"type": "text"},
-                "raw_webcontent": {"type": "text"}
+                "created_at": {"type": "date"}
             }
         }
     }
+    db.con.indices.create(index=log_index, body=log_mapping)
+    print(f"[INIT] Created log index: {log_index}")
 
-    try:
-        # Create index if it does not exist
-        if not db.con.indices.exists(index=URLS_INDEX):
-            db.con.indices.create(index=URLS_INDEX, body=urls_mapping)
-            print("Created {} index.".format(URLS_INDEX))
+def get_monthly_log_index():
+    """Return index name for the current month, e.g., crawler-logs-2025-09"""
+    return f"{LOGS_URLS_INDEX_PREFIX}-{datetime.utcnow().strftime('%Y-%m')}"
 
-            # Insert the initial URL into the index to bootstrap crawling
-            db_insert_if_new_url(
-                url=initial_url,
-                source='db_create_database',
-                parent_host=urlsplit(initial_url)[1],
-                db=db
-            )
-            print("Inserted initial url {}.".format(initial_url))
+def bulk_insert_urls(urls_data, db, debug=False):
+    """
+    Bulk insert/update URLs in Elasticsearch, with optional directory tree expansion.
+    """
+    now_iso = datetime.now(timezone.utc).isoformat()
+    actions = []
 
-        return True
-    except Exception as e:
-        print("Error creating indices or inserting initial document:", e)
-        return False
+    # -----------------------------
+    # Step 1: Expand all URLs first
+    # -----------------------------
+    expanded_urls_data = []
+    seen_urls = set()
+
+    for data in urls_data:
+        url = data["url"]
+
+        # Always include the original URL
+        candidates = [url]
+
+        # Add directory tree if enabled and unvisited
+        if HUNT_OPEN_DIRECTORIES and not data.get("visited", False):
+            candidates.extend(get_directory_tree(url))
+
+        for candidate in candidates:
+            candidate = sanitize_url(candidate)
+            if candidate in seen_urls:
+                continue
+            seen_urls.add(candidate)
+
+            # Copy original data but replace URL
+            new_data = dict(data)
+            new_data["url"] = candidate
+
+            # If it came from expansion, adjust source
+            if candidate != url:
+                new_data["source"] = "insert_directory_tree"
+
+            expanded_urls_data.append(new_data)
+
+    # -----------------------------
+    # Step 2: Bulk processing
+    # -----------------------------
+    for data in expanded_urls_data:
+        url = data["url"]
+        host = urlsplit(url).hostname or ""
+
+        if is_host_block_listed(host) or not is_host_allow_listed(host) or is_url_block_listed(url):
+            continue
+
+        visited = data.get("visited", False)
+        source = data.get("source", "")
+        parent_host = data.get("parent_host", urlsplit(url).hostname or "")
+
+        # Build query metadata
+        parsed = urlsplit(url)
+        query = parsed.query
+        has_query = bool(query)
+        query_dict = parse_qs(query)
+        query_variables = list(set(query_dict.keys()))
+        query_values = list(set(v for values in query_dict.values() for v in values))
+
+        # ----------------------
+        # Unvisited -> log index
+        # ----------------------
+        if not visited:
+            log_index = get_monthly_log_index()
+            if not db.con.indices.exists(index=log_index):
+                create_log_index(db, log_index)
+
+            doc = {
+                "url": url,
+                "visited": False,
+                "source": source,
+                "parent_host": parent_host,
+                "host": host,
+                "random_bucket": random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1),
+                "has_query": has_query,
+                "query_variables": query_variables,
+                "query_values": query_values,
+                "created_at": now_iso,
+                "updated_at": now_iso
+            }
+            if "email" in data and isinstance(data["email"], str):
+                doc["emails"] = [data["email"]]
+
+            actions.append({
+                "_op_type": "index",
+                "_index": log_index,
+                "_source": doc
+            })
+
+        # ----------------------
+        # Visited -> master index
+        # ----------------------
+        else:
+            doc_id = hash_url(url)
+            insert_only_fields = {
+                "url": url,
+                "host": host,
+                "source": source,
+                "parent_host": parent_host,
+                "has_query": has_query,
+                "created_at": now_iso,
+            }
+            if "email" in data and isinstance(data["email"], str):
+                insert_only_fields["emails"] = [data["email"]]
+
+            path = unquote(parsed.path)
+            _, file_extension = os.path.splitext(path)
+            if file_extension:
+                insert_only_fields["file_extension"] = file_extension.lower().lstrip('.')
+
+            doc_fields = {k: v for k, v in data.items() if v is not None and k not in ("url","parent_host","source")}
+            doc_fields["visited"] = True
+            doc_fields["updated_at"] = now_iso
+
+            actions.append({
+                "_op_type": "update",
+                "_index": MASTER_URLS_INDEX,
+                "_id": doc_id,
+                "scripted_upsert": True,
+                "script": {
+                    "source": """
+                        boolean has_updated = false;
+                        for (entry in params.entrySet()) {
+                            if (entry.value != null && (!ctx._source.containsKey(entry.key) || ctx._source[entry.key] != entry.value)) {
+                                ctx._source[entry.key] = entry.value;
+                                has_updated = true;
+                            }
+                        }
+                        if (has_updated) {
+                            ctx._source.updated_at = params.updated_at;
+                        }
+                    """,
+                    "lang": "painless",
+                    "params": doc_fields
+                },
+                "upsert": {**insert_only_fields, **doc_fields}
+            })
+
+    # -----------------------------
+    # Step 3: Bulk send
+    # -----------------------------
+    if actions:
+        helpers.bulk(db.con, actions)
+        if debug:
+            print(f"[BULK] Inserted/Updated {len(actions)} URLs (expanded + deduped)")
+
+
+def get_directory_tree(url):
+    """
+    Generate a list of parent directory URLs from a given URL path.
+
+    This function creates URLs for all parent directories in the path hierarchy,
+    which is useful for directory traversal during web crawling. It builds URLs
+    by progressively removing path segments from the end, creating a breadcrumb
+    trail of parent directories.
+
+    Args:
+        url (str): The full URL to extract directory tree from
+                  (e.g., "https://example.com/path/to/file.html")
+
+    Returns:
+        list: List of parent directory URLs in descending order from immediate
+              parent to root directory
+
+    Process:
+        1. Extracts scheme and hostname (preserving port if present)
+        2. URL-decodes the path to handle encoded characters
+        3. Splits path into components using PurePosixPath
+        4. Iteratively removes trailing path segments to build parent URLs
+        5. Returns list of parent directory URLs
+
+    Note:
+        URLs are unquoted to handle percent-encoded paths correctly.
+        The function assumes POSIX-style paths with forward slashes.
+        Root directory and the original URL itself are not included in results.
+    """
+    # Host will have scheme, hostname and port
+    host = '://'.join(urlsplit(url)[:2])
+    dtree = []
+    for iter in range(1, len(PurePosixPath(unquote(urlparse(url).path)).parts[0:])):
+        dtree.append(str(host+'/'+'/'.join(PurePosixPath(unquote(urlparse(url).path)).parts[1:-iter])))
+    return dtree
+
+
+
+def insert_directory_tree(content_url, db):
+    """
+    Insert all parent directory URLs of a given URL into the crawling database.
+
+    This function generates and stores all parent directory URLs for potential
+    crawling, enabling directory traversal and discovery of additional content
+    that might not be linked from the current page. It's useful for exploring
+    web server directory structures systematically.
+
+    Args:
+        content_url (str): The source URL whose parent directories should be added
+                          (e.g., "https://example.com/docs/files/document.pdf")
+        db: Database connection object for storing URLs
+
+    Process:
+        1. Extracts the parent host from the source URL
+        2. Generates all parent directory URLs using get_directory_tree()
+        3. Sanitizes each directory URL
+        4. Inserts each directory URL into the database as unvisited
+        5. Marks all entries with source "insert_directory_tree" for tracking
+
+    Example:
+        For URL "https://site.com/blog/2023/posts/article.html", this will add:
+        - https://site.com/blog/2023/posts/
+        - https://site.com/blog/2023/
+        - https://site.com/blog/
+
+    """
+    parent_host = urlsplit(content_url)[1]
+    for url in get_directory_tree(content_url):
+        url = sanitize_url(url)
+        db_insert_if_new_url(
+                url=url, words='',
+                content_type='',
+                visited=False,
+                source="insert_directory_tree",
+                parent_host=parent_host,
+                db=db)
+
+
+def is_host_block_listed(url):
+    """
+    Check if a given URL matches any pattern in the host blocklist.
+
+    This function iterates through a predefined list of regular expressions
+    (`HOST_REGEX_BLOCK_LIST`) and checks if the given URL matches any of them.
+    The match is case-insensitive and Unicode-aware.
+
+    Args:
+        url (str): The URL to check against the blocklist.
+
+    Returns:
+        bool: True if the URL matches any blocklist pattern, False otherwise.
+    """
+    for regex in HOST_REGEX_BLOCK_LIST:
+        if re.search(regex, url, flags=re.I | re.U):
+            return True
+    return False
+        
+def is_url_block_listed(url):
+    """
+    Check if a given URL matches any pattern in the URL blocklist.
+
+    This function scans the input URL against a predefined list of regular
+    expressions (`URL_REGEX_BLOCK_LIST`) to determine if it should be blocked.
+    The match is performed in a case-insensitive and Unicode-aware manner.
+
+    Args:
+        url (str): The full URL to check against the blocklist.
+
+    Returns:
+        bool: True if the URL matches any blocklist pattern, False otherwise.
+    """
+    for regex in URL_REGEX_BLOCK_LIST:
+        if re.search(regex, url, flags=re.I | re.U):
+            return True
+    return False
+
+
+def is_host_allow_listed(url):
+    """
+    Check if a URL's host matches any regular expression in the allowlist.
+
+    This function iterates through the `HOST_REGEX_ALLOW_LIST`, which contains
+    regular expression patterns representing hosts that are explicitly allowed.
+    If the host part of the given URL matches any of the patterns, the function returns True.
+
+    Args:
+        url (str): The URL to evaluate.
+
+    Returns:
+        bool: True if the URL matches an allowlist pattern, False otherwise.
+    """
+    for regex in HOST_REGEX_ALLOW_LIST:
+        if re.search(regex, url, flags=re.I | re.U):
+            return True
+    return False
+
 
 
 def db_insert_if_new_url(
@@ -402,86 +954,75 @@ def db_insert_if_new_url(
         debug=False,
         fast_crawled=None):
     """
-    Inserts a new URL document into the Elasticsearch database if it doesn't already exist.
-    If the document exists, updates selective fields based on the current data.
-
-    This function handles document deduplication by hashing the URL and uses
-    Elasticsearch's `scripted_upsert` mechanism to insert or update the document atomically.
-    It also adds metadata such as host levels, directory levels, query variables,
-    and file extensions for better query and filtering support.
-
-    Args:
-        url (str): The target URL to insert or update in the database.
-        isopendir (bool, optional): Indicates if the URL is an open directory.
-        visited (bool, optional): Flag indicating if the URL has been visited.
-        source (str, optional): Source of the URL (e.g., parent script or referring domain).
-        content_type (str, optional): The content type of the page (e.g., 'text/html').
-        words (str, optional): Extracted text content or word tokens from the page.
-        min_webcontent (str, optional): A minimal filtered version of the web content.
-        raw_webcontent (str, optional): The raw unprocessed HTML or page source.
-        isnsfw (float or str, optional): NSFW confidence score or label (0–1).
-        resolution (str or int, optional): Resolution value or score of the content.
-        parent_host (str, optional): Parent host from which the URL was discovered.
-        email (str, optional): Email address found on the page (if any).
-        db (object): Database object with a `.con.update()` method (Elasticsearch wrapper).
-        debug (bool): Enables verbose debug logging and value comparisons.
-        fast_crawled (bool, optional): Whether this URL was fast-crawled (vs. full crawl).
-
-    Returns:
-        bool: True if insert/update was successful, False if an error occurred.
-
-    Notes:
-        - This function uses `hash_url(url)` to generate a unique document ID.
-        - If the URL already exists, only fields with changed values are updated.
-        - Emails are appended to the `emails` array only if they are new.
-        - Host and directory levels are padded to fixed lengths for better filtering.
-        - Uses retry logic on version conflict errors (up to 2 attempts).
+    Insert a URL into Elasticsearch.
+    - If visited=False -> append-only into monthly log index (fast, no dedup).
+    - If visited=True  -> upsert into master index (dedup by hash).
     """
-    host = urlsplit(url)[1]
-    url = remove_jsessionid_with_semicolon(url)
-    url = sanitize_url(url)
-    parsed = urlsplit(url)
-    query = parsed.query
-    has_query = bool(query)
-    query_dict = parse_qs(query)
-    query_variables = list(set(query_dict.keys()))
-    query_values = list(
-            set(v for values in query_dict.values() for v in values)
-            )
-    now_iso = datetime.now(timezone.utc).isoformat()
-    doc_id = hash_url(url)
-
     try:
-        existing_doc = None
-        if debug:
+        host = urlsplit(url).hostname or ''
+        if is_host_block_listed(host) or not is_host_allow_listed(host) or is_url_block_listed(url):
+            return
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        parsed = urlsplit(url)
+        query = parsed.query
+        has_query = bool(query)
+        query_dict = parse_qs(query)
+        query_variables = list(set(query_dict.keys()))
+        query_values = list(set(v for values in query_dict.values() for v in values))
+
+        # -------------------------------------------
+        # Case 1: Not visited yet -> LOG INDEX
+        # -------------------------------------------
+
+        if not visited:
+            log_index = get_monthly_log_index()
+
+            # auto-create if needed
+            if not db.con.indices.exists(index=log_index):
+                create_log_index(db, log_index)
+
+            doc = {
+                "url": url,
+                "visited": False,
+                "source": source,
+                "parent_host": parent_host,
+                "host": host,
+                "random_bucket": random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1),
+                "fast_crawled": bool(fast_crawled) if fast_crawled is not None else None,
+                "has_query": has_query,
+                "query_variables": query_variables,
+                "query_values": query_values,
+                "created_at": now_iso
+            }
+            if email and isinstance(email, str):
+                doc["emails"] = [email]
+
             try:
-                existing_doc = db.con.get(
-                        index=URLS_INDEX,
-                        id=doc_id
-                    )["_source"]
-            except Exception:
-                print(f"[DEBUG] Unable to get doc -{url}-: {get_err}")
+                db.con.index(index=log_index, document=doc)
+                if debug:
+                    print(f"[LOG] Inserted {url} into {log_index}")
+                return True
+            except Exception as e:
+                print(f"[Elasticsearch] Error inserting into log index: {e}")
+                return False
 
-        # Insert-only fields
-        insert_only_fields = {
-            "url": url,
-            "host": host
-        }
+        # -------------------------------------------
+        # Case 2: Visited -> MASTER INDEX (dedup)
+        # -------------------------------------------
+        else:
+            doc_id = hash_url(url)
 
-        if email:
-            if isinstance(email, str):
-                insert_only_fields["emails"] = [email]
-            else:
-                print(f"[Warning] Skipping non-string email: {email}")
-
-        if existing_doc is None:
-            insert_only_fields["random_bucket"] = random.randint(
-                    0, ELASTICSEARCH_RANDOM_BUCKETS - 1)
-
-            if source:
-                insert_only_fields["source"] = source
-            if parent_host:
-                insert_only_fields["parent_host"] = parent_host
+            # Insert-only fields
+            insert_only_fields = {
+                "url": url,
+                "host": host,
+                "random_bucket": random.randint(0, ELASTICSEARCH_RANDOM_BUCKETS - 1),
+                "source": source,
+                "parent_host": parent_host,
+                "has_query": has_query,
+                "created_at": now_iso,
+            }
 
             # Safely extract host and directory levels
             host_parts = get_host_levels(host).get("host_levels", [])
@@ -522,164 +1063,106 @@ def db_insert_if_new_url(
             for i, part in enumerate(dir_parts[:MAX_DIR_LEVELS]):
                 insert_only_fields[f"directory_level_{i+1}"] = part
 
-        # Fields that may be updated
-        doc = {}
-        if content_type:
-            doc["content_type"] = content_type
-        if fast_crawled is not None:
-            doc["fast_crawled"] = bool(fast_crawled)
-        if words:
-            doc["words"] = words
-        if min_webcontent:
-            doc["min_webcontent"] = min_webcontent
-        if raw_webcontent:
-            doc["raw_webcontent"] = raw_webcontent
-        if isopendir is not None:
-            doc["isopendir"] = bool(isopendir)
-        if isnsfw:
-            doc["isnsfw"] = float(isnsfw)
-        if resolution:
-            resolution_str = str(resolution)
-            if resolution_str.isdigit():
-                doc["resolution"] = int(resolution_str)
-            else:
-                doc["resolution"] = 0
-        if visited is not None:
-            doc["visited"] = bool(visited)
-        elif "visited" not in insert_only_fields:
-            insert_only_fields["visited"] = False
 
-        # Debug: show diff
-        if debug:
-            if existing_doc:
-                for key, new_value in {**insert_only_fields, **doc}.items():
-                    if key in ("random_bucket", "source", "parent_host"):
-                        continue
-                    old_value = existing_doc.get(key, None)
-                    if key != "visited" and old_value != new_value:
-                        print(f"[DEBUG] INSERT - Comparing update: {url}")
-                        print(f"  {key}: '{old_value}' ➡ '{new_value}'")
-            else:
-                print(f"[DEBUG] INSERT - New document for URL: {url}")
 
-            print(f"[DEBUG] Host levels for {url}: {host_parts}")
-            print(f"[DEBUG] Directory levels for {url}: {dir_parts}")
+            if email and isinstance(email, str):
+                insert_only_fields["emails"] = [email]
 
-        # Build update script
-        script_lines = ["boolean has_updated = false;"]
+            # File extension
+            path = unquote(parsed.path)
+            _, file_extension = os.path.splitext(path)
+            if file_extension:
+                insert_only_fields["file_extension"] = file_extension.lower().lstrip('.')
 
-        if isinstance(email, str):
-            script_lines.append("""
-                if (!ctx._source.containsKey('emails')) {
-                    ctx._source.emails = [params.email];
-                    has_updated = true;
-                } else if (!ctx._source.emails.contains(params.email)) {
-                    ctx._source.emails.add(params.email);
-                    has_updated = true;
-                }
-            """)
-            doc["email"] = email
+            # Fields that may be updated
+            doc = {
+                "visited": True,
+                "content_type": content_type,
+                "fast_crawled": bool(fast_crawled) if fast_crawled is not None else None,
+                "words": words,
+                "min_webcontent": min_webcontent,
+                "raw_webcontent": raw_webcontent,
+                "isopendir": bool(isopendir) if isopendir is not None else None,
+                "updated_at": now_iso,
+            }
+            if isnsfw:
+                doc["isnsfw"] = float(isnsfw)
+            if resolution:
+                doc["resolution"] = int(resolution) if str(resolution).isdigit() else 0
 
-        for key in doc:
+            # Script for atomic updates
+            script_lines = ["boolean has_updated = false;"]
 
-            if key == "visited":
-                script_lines.append(
-                    """
-                    if (!ctx._source.containsKey('visited') ||
-                        ctx._source.visited == false) {
-                        ctx._source.visited = params.visited;
+            if isinstance(email, str):
+                script_lines.append("""
+                    if (!ctx._source.containsKey('emails')) {
+                        ctx._source.emails = [params.email];
+                        has_updated = true;
+                    } else if (!ctx._source.emails.contains(params.email)) {
+                        ctx._source.emails.add(params.email);
                         has_updated = true;
                     }
-                    """
-                )
+                """)
+                doc["email"] = email
 
-            else:
-                script_lines.append(
-                    f"""
-                    if (params.containsKey('{key}')) {{
-                        def old_val = ctx._source.containsKey('{key}')
-                                      ? ctx._source['{key}']
-                                      : null;
-                        if (old_val != params['{key}']) {{
-                            ctx._source['{key}'] = params['{key}'];
+            for key in doc:
+                if doc[key] is None:
+                    continue
+                if key == "visited":
+                    script_lines.append("""
+                        if (!ctx._source.containsKey('visited') || ctx._source.visited == false) {
+                            ctx._source.visited = params.visited;
                             has_updated = true;
-                        }}
-                    }}
-                    """
-                )
-        script_lines.append(
-            "if (has_updated) { "
-            "ctx._source.updated_at = params.updated_at; "
-            "}"
-        )
-        script = "\n".join(script_lines)
-
-        # Merge doc fields safely
-        try:
-            upsert_doc = {**insert_only_fields, **doc}
-        except Exception as merge_err:
-            print("[DEBUG] Error merging insert_only_fields and doc")
-            print("  insert_only_fields:", insert_only_fields)
-            print("  doc:", doc)
-            raise merge_err
-
-        upsert_doc["created_at"] = now_iso
-        upsert_doc["updated_at"] = now_iso
-        doc["updated_at"] = now_iso
-
-        for attempt in range(2):  # Try up to 2 times
-            try:
-                db.con.update(
-                    index=URLS_INDEX,
-                    id=doc_id,
-                    body={
-                        "scripted_upsert": True,
-                        "script": {
-                            "source": script,
-                            "lang": "painless",
-                            "params": doc
-                        },
-                        "upsert": upsert_doc
-                    }
-                )
-                return True  # Success on first or second attempt
-            except ConflictError as ce:
-                if attempt == 0:
-                    if debug:
-                        print(
-                            "[RETRY] Version conflict on first attempt "
-                            f"for URL: {url}"
-                        )
-                    time.sleep(0.05)  # Slight pause before retry
+                        }
+                    """)
                 else:
-                    print(
-                        "[Elasticsearch] Final ConflictError on retry for "
-                        f"URL '{url}': {ce}"
+                    script_lines.append(f"""
+                        if (params.containsKey('{key}') && params['{key}'] != null) {{
+                            def old_val = ctx._source.containsKey('{key}') ? ctx._source['{key}'] : null;
+                            if (old_val != params['{key}']) {{
+                                ctx._source['{key}'] = params['{key}'];
+                                has_updated = true;
+                            }}
+                        }}
+                    """)
+
+            script_lines.append("if (has_updated) { ctx._source.updated_at = params.updated_at; }")
+            script = "\n".join(script_lines)
+
+            upsert_doc = {**insert_only_fields, **{k: v for k, v in doc.items() if v is not None}}
+
+            for attempt in range(2):
+                try:
+                    db.con.update(
+                        index=MASTER_URLS_INDEX,
+                        id=doc_id,
+                        body={
+                            "scripted_upsert": True,
+                            "script": {"source": script, "lang": "painless", "params": doc},
+                            "upsert": upsert_doc
+                        }
                     )
+                    if debug:
+                        print(f"[MASTER] Upserted {url} into {MASTER_URLS_INDEX}")
+                    return True
+                except ConflictError:
+                    if attempt == 0:
+                        time.sleep(0.05)
+                        continue
+                    else:
+                        print(f"[MASTER] ConflictError on {url}")
+                        return False
+                except Exception as e:
+                    print(f"[MASTER] Error inserting URL '{url}': {e}")
                     return False
-            except Exception as e:
-                print(
-                    "[Elasticsearch] Error inserting URL "
-                    f"'{url}': {type(e).__name__} - {e}"
-                )
-                return False
 
     except Exception as e:
-        print(
-            "[Elasticsearch] Error inserting URL "
-            f"'{url}': {type(e).__name__} - {e}"
-        )
+        print(f"[Elasticsearch] Unexpected error inserting URL '{url}': {e}")
         return False
 
 
-def mark_url_as_fast_crawled(url, db):
-    db_insert_if_new_url(
-        url=url,
-        source='fast_extension_crawler.no_match',
-        fast_crawled=True,
-        db=db,
-        debug=False
-    )
+
+def mark_url_as_fast_crawled_visited(url, db):
     """
     Marks a URL as having been fast-crawled using the extension-based crawler.
 
@@ -700,6 +1183,14 @@ def mark_url_as_fast_crawled(url, db):
         - This is typically used for URLs that were scanned but didn’t match
           any criteria requiring deeper analysis.
     """
+    db_insert_if_new_url(
+        url=url,
+        source='fast_extension_crawler.no_match',
+        fast_crawled=True,
+        db=db,
+        visited=False,
+        debug=False
+    )
 
 
 def get_host_levels(hostname):
@@ -979,6 +1470,7 @@ content_type_doc_regex = [
         r"^application/x-msexcel$",
         r"^application/vnd\.visio$",
         r"^application/vnd\.ms-excel$",
+        r"^application/vnd\.ms-visio\.drawing$",
         r"^application/vnd\.ms-word\.document\.12$",
         r"^application/vnd\.ms-excel\.openxmlformat$",
         r"^application/vnd\.oasis\.opendocument\.text$",
@@ -1046,6 +1538,7 @@ content_type_font_regex = [
         r"^application/x-font-truetype$",
         r"^application/x-font-opentype$",
         r"^value=application/x-font-woff2$",
+        r"^application/vnd\.ms-fontobject$",
         r"^application/font-woff2,font/woff2$",
         r"^font/woff2\|application/octet-stream\|font/x-woff2$",
         ]
@@ -1098,6 +1591,7 @@ content_type_video_regex = [
 content_type_plain_text_regex = [
         r"^\.js$",
         r"^text$",
+        r"^json$",
         r"^text/\*$",
         r"^text/js$",
         r"^text/xml$",
@@ -1107,6 +1601,7 @@ content_type_plain_text_regex = [
         r"^text/vtt$",
         r"^app/json$",
         r"^text/x-c$",
+        r"^text/text$",
         r"^text/x-sh$",
         r"^text/json$",
         r"^text/yaml$",
@@ -1138,7 +1633,9 @@ content_type_plain_text_regex = [
         r"^text/x-amzn-ion$",
         r"^text/javsacript$",
         r"^text/ecmascript$",
+        r"^application/json$",
         r"^text/x-vcalendar$",
+        r"^model/gltf\+json$",
         r"^text/x-component$",
         r"^application/text$",
         r"^text/x-html-parts$",
@@ -1146,12 +1643,20 @@ content_type_plain_text_regex = [
         r"^text/x-javascript$",
         r"^text/event-stream$",
         r"^text/vnd\.graphviz$",
+        r"^application/json-p$",
         r"^application/ld\+json$",
+        r"^application/x-ndjson$",
+        r"^application/hr\+json$",
         r"^application/ion\+json$",
         r"^application/hal\+json$",
         r"^text/txtcharset=utf-8$",
+        r"^application/geo\+json$",
+        r"^application/feed\+json$",
         r"^applicaiton/jasvascript$",
+        r"^application/v3\.25\+json$",
         r"^application/json,charset=",
+        r"^application/v3\.24\+json$",
+        r"^application/schema\+json$",
         r"^application/stream\+json$",
         r"^application/problem\+json$",
         r"^text/0\.4/hammer\.min\.js$",
@@ -1167,7 +1672,66 @@ content_type_plain_text_regex = [
         r"^text/vnd\.trolltech\.linguist$",
         r"^application/jsoncharset=UTF-8$",
         r"^text/x-comma-separated-values$",
+        r"^application/linkset\+json$",
+        r"^application/x-ipynb\+json$",
+        r"^application/jwk-set\+json$",
+        r"^application/activity\+json$",
+        r"^application/vnd\.geo\+json$",
+        r"^application/x-amz-json-1\.0$",
+        r"^application/vnd\.s\.v1\+json$",
+        r"^application/vnd\.siren\+json$",
+        r"^Content-Type:application/json$",
+        r"^:application/application/json$",
+        r"^application/vnd\.bestbuy\+json$",
+        r"^application/vnd\.1cbn\.v1+json$",
+        r"^application/vnd\.1cbn\.v1\+json$",
+        r"^application/sparql-results\+json$",
+        r"^application/vnd\.imgur\.v1\+json$",
+        r"^application/vnd\.adobe\.dex\+json$",
         r"^application/json,application/json$",
+        r"^application/vnd\.solid-v1\.0\+json$",
+        r"^application/graphql-response\+json$",
+        r"^application/speculationrules\+json$",
+        r"^application/vnd\.vimeo\.user\+json$",
+        r"^application/vnd\.wg\.cds_api\+json$",
+        r"^application/vnd\.urbanairship\+json$",
+        r"^application/vnd\.vimeo\.album\+json$",
+        r"^application/vnd\.vimeo\.video\+json$",
+        r"^application/amazonui-streaming-json$",
+        r"^application/vnd\.vimeo\.error\+json$",
+        r"^application/vnd\.oai\.openapi\+json$",
+        r"^application/vnd\.com\.amazon\.api\+json$",
+        r"^application/vnd\.treasuredata\.v1\+json$",
+        r"^application/vnd\.github-octolytics\+json$",
+        r"^application/vnd\.mangahigh\.api-v1\+json$",
+        r"^application/vnd\.maxmind\.com-city\+json$",
+        r"^application/vnd\.initializr\.v2\.2\+json$",
+        r"^application/vnd\.radio-canada\.neuro\+json$",
+        r"^application/vnd\.vimeo\.profilevideo\+json$",
+        r"^application/vnd\.oracle\.adf\.version\+json$",
+        r"^application/vnd\.maxmind\.com-country\+json$",
+        r"^application/vnd\.treasuredata\.v1\.js\+json$",
+        r"^application/vnd\.disney\.error\.v1\.0\+json$",
+        r"^application/vnd\.vimeo\.currency\.json\+json$",
+        r"^application/vnd\.vimeo\.video\.texttrack\+json$",
+        r"^application/vnd\.contentful\.delivery\.v1\+json$",
+        r"^application/vnd\.maxmind\.com-insights\+json$",
+        r"^application/vnd\.adobe\.error-response\+json$",
+        r"^application/vnd\.vimeo\.profilesection\+json$",
+        r"^application/vnd\.spring-boot\.actuator\.v3\+json$",
+        r"^application/vnd\.vimeo\.marketplace\.skill\+json$",
+        r"^application/vnd\.disney\.field\.error\.v1\.0\+json$",
+        r"^application/vnd\.oracle\.adf\.resourcecollection\+json$",
+        r"^application/vnd\.vmware\.horizon\.manager\.branding\+json$",
+        r"^application/vnd\.vimeo\.live\.interaction_room_status\+json$",
+        r"^application/vnd\.abc\.terminus\.content\+json$",
+        r"^application/vnd\.maxmind\.com-error\+json$",
+        r"^application/vnd\.inveniordm\.v1\+json$",
+        r"^application/vnd\.vimeo\.credit\+json$",
+        r"^application/vnd\.vimeo\.comment\+json$",
+        r"^application/vnd\.vimeo\.location\+json$",
+        r"^application/json\+containerv1-server$",
+        r"^application/json-amazonui-streaming$",
     ]
 
 # Regex patterns to match URLs that should be ignored or handled as no-ops
@@ -1230,6 +1794,7 @@ url_all_others_regex = [
         r"^bitcoin:",
         r"^threema:",
         r"^\.onion$",
+        r"^\(null\)$",
         r"^\(none\)$",
         r"^ethereum:",
         r"^litecoin:",
@@ -1267,12 +1832,13 @@ content_type_all_others_regex = [
         r"^js$",
         r"^\*$",
         r"^None$",
-        r"^json$",
         r"^null$",
         r"^file$",
         r"^\*/\*$",
         r"^binary$",
         r"^unknown$",
+        r"^\(null\)$",
+        r"^\(none\)$",
         r"^text/css$",
         r"^redirect$",
         r"^model/usd$",
@@ -1314,11 +1880,9 @@ content_type_all_others_regex = [
         r"^application/wasm$",
         r"^application/x-js$",
         r"^application/mobi$",
-        r"^model/gltf\+json$",
         r"^application/save$",
         r"^application/null$",
         r"^application/zlib$",
-        r"^application/json$",
         r"^application/x-sh$",
         r"^application/empty$",
         r"^application/x-cbr$",
@@ -1337,7 +1901,6 @@ content_type_all_others_regex = [
         r"^application/x-tgif$",
         r"^application/x-perl$",
         r"^application/binary$",
-        r"^application/json-p$",
         r"^application/turtle$",
         r"^application/x-doom$",
         r"^application/x-troff$",
@@ -1351,16 +1914,15 @@ content_type_all_others_regex = [
         r"^application/x-empty$",
         r"^application/x-blorb$",
         r"^application/java-vm$",
+        r"^application/msgpack$",
         r"^application/rfc\+xml$",
         r"^application/x-netcdf$",
         r"^application/gml\+xml$",
         r"^chemical/x-molconn-Z$",
-        r"^application/x-ndjson$",
         r"^application/x-nozomi$",
         r"^application/x-adrift$",
         r"^application/x-binary$",
         r"^application/rdf\+xml$",
-        r"^application/hr\+json$",
         r"^application/download$",
         r"^application/rss\+xml$",
         r"^application/x-msword$",
@@ -1373,7 +1935,6 @@ content_type_all_others_regex = [
         r"^application/calques3d$",
         r"^application/n-triples$",
         r"^application/vnd\.smaf$",
-        r"^application/geo\+json$",
         r"^application/ttml\+xml$",
         r"^application/xslt\+xml$",
         r"^application/dash\+xml$",
@@ -1385,7 +1946,6 @@ content_type_all_others_regex = [
         r"^text/javascript=UTF-8$",
         r"^application/x-zmachine$",
         r"^application/typescript$",
-        r"^application/feed\+json$",
         r"^application/x-director$",
         r"^application/postscript$",
         r"^application/x-rss\+xml$",
@@ -1395,6 +1955,7 @@ content_type_all_others_regex = [
         r"^application/javascript$",
         r"^application/oct-stream$",
         r"^application/x-httpd-cgi$",
+        r"^application/dns-message$",
         r"^application/vnd\.ms-wpl$",
         r"^application/x-asciicast$",
         r"^applications/javascript$",
@@ -1407,21 +1968,15 @@ content_type_all_others_regex = [
         r"^application/x-directory$",
         r"^application/x-troff-man$",
         r"^application/mac-binhex40$",
-        r"^application/schema\+json$",
         r"^application/encrypted-v2$",
         r"^application/java-archive$",
         r"^application/x-javascript$",
         r"^application/x-msdownload$",
         r"^application/octet-stream$",
         r"^application/vnd\.ms-word$",
-        r"^application/v3\.24\+json$",
         r"^application/x-executable$",
         r"^application/marcxml\+xml$",
-        r"^application/v3\.25\+json$",
         r"^javascript charset=UTF-8$",
-        r"^application/linkset\+json$",
-        r"^application/x-ipynb\+json$",
-        r"^application/jwk-set\+json$",
         r"^multipart/x-mixed-replace$",
         r"^application/pgp-encrypted$",
         r"^application/x-base64-frpc$",
@@ -1429,9 +1984,7 @@ content_type_all_others_regex = [
         r"^application/x-ms-manifest$",
         r"^application/x-mobi8-ebook$",
         r"^application/grpc-web-text$",
-        r"^application/activity\+json$",
         r"^application/force-download$",
-        r"^application/vnd\.geo\+json$",
         r"^application/vnd\.visionary$",
         r"^application/x-java-archive$",
         r"^application/x-octet-stream$",
@@ -1442,12 +1995,9 @@ content_type_all_others_regex = [
         r"^application/vnd\.olpc-sugar$",
         r"^text/x-unknown-content-type$",
         r"^application/grpc-web\+proto$",
-        r"^application/x-amz-json-1\.0$",
         r"^application/x-msdos-program$",
         r"^application/x-iso9660-image$",
-        r"^application/vnd\.s\.v1\+json$",
         r"^application/x-csp-hyperevent$",
-        r"^application/vnd\.siren\+json$",
         r"^application/x-ms-application$",
         r"^application/vnd\.ms-opentype$",
         r"^application/x-debian-package$",
@@ -1457,16 +2007,11 @@ content_type_all_others_regex = [
         r"^application/x-java-jnlp-file$",
         r"^application/x-httpd-ea-php71$",
         r"^application/rls-services\+xml$",
-        r"^Content-Type:application/json$",
         r"^application/vnd\.ogc\.wms_xml$",
         r"^application/x-apple-diskimage$",
-        r"^:application/application/json$",
-        r"^application/vnd\.bestbuy\+json$",
+        r"^application/privatetempstorage$",
         r"^application/x-chrome-extension$",
         r"^application/x-mobipocket-ebook$",
-        r"^application/vnd\.1cbn\.v1+json$",
-        r"^application/vnd\.ms-fontobject$",
-        r"^application/privatetempstorage$",
         r"^application/vnd\.ms-powerpoint$",
         r"^application/sparql-results\+xml$",
         r"^application/vnd\.openxmlformats$",
@@ -1474,76 +2019,36 @@ content_type_all_others_regex = [
         r"^application/vnd\.ms-officetheme$",
         r"^application/vnd\.wv\.csp\+wbxml$",
         r"^application/x-ms-dos-executable$",
-        r"^application/vnd\.1cbn\.v1\+json$",
         r"^application/vnd\.geogebra\.file$",
         r"^application/grpc-web-text\+proto$",
-        r"^application/sparql-results\+json$",
         r"^application/vnd\.lotus-screencam$",
-        r"^application/vnd\.imgur\.v1\+json$",
         r"^application/x-pkcs7-certificates$",
-        r"^application/vnd\.adobe\.dex\+json$",
         r"^application/x-www-form-urlencoded$",
         r"^application/vnd\.google-earth\.kmz$",
-        r"^application/vnd\.solid-v1\.0\+json$",
         r"^application/x-typekit-augmentation$",
         r"^application/x-unknown-content-type$",
-        r"^application/graphql-response\+json$",
-        r"^application/speculationrules\+json$",
-        r"^application/vnd\.vimeo\.user\+json$",
         r"^application/octet-stream,text/html$",
-        r"^application/vnd\.wg\.cds_api\+json$",
-        r"^application/vnd\.vimeo\.album\+json$",
-        r"^application/json-amazonui-streaming$",
-        r"^application/vnd\.vimeo\.video\+json$",
+        r"^application/octet-stream,text/plain$",
         r"^application/x-research-info-systems$",
         r"^application/vnd\.mapbox-vector-tile$",
-        r"^application/amazonui-streaming-json$",
-        r"^application/vnd\.vimeo\.error\+json$",
-        r"^application/json\+containerv1-server$",
-        r"^application/vnd\.vimeo\.credit\+json$",
+        r"^application/octet-stream,atext/plain$",
         r"^application/vnd\.cas\.services\+yaml$",
         r"^application/x-redhat-package-manager$",
         r"^application/vnd\.groove-tool-template$",
-        r"^application/vnd\.inveniordm\.v1\+json$",
         r"^application/octet-streamCharset=UTF-8$",
-        r"^application/vnd\.vimeo\.comment\+json$",
         r"^application/vnd\.apple\.installer\+xml$",
-        r"^application/vnd\.vimeo\.location\+json$",
         r"^application/opensearchdescription\+xml$",
         r"^application/vnd\.google-earth\.kml\+xml$",
-        r"^application/vnd\.com\.amazon\.api\+json$",
-        r"^application/vnd\.treasuredata\.v1\+json$",
-        r"^application/vnd\.mangahigh\.api-v1\+json$",
-        r"^application/vnd\.maxmind\.com-city\+json$",
-        r"^application/vnd\.initializr\.v2\.2\+json$",
-        r"^application/vnd\.maxmind\.com-error\+json$",
+        r"^text/javascript/application/x-javascript$",
         r"^application/vnd\.android\.package-archive$",
-        r"^application/vnd\.radio-canada\.neuro\+json$",
-        r"^application/vnd\.vimeo\.profilevideo\+json$",
-        r"^application/vnd\.oracle\.adf\.version\+json$",
-        r"^application/vnd\.maxmind\.com-country\+json$",
-        r"^application/vnd\.treasuredata\.v1\.js\+json$",
-        r"^application/vnd\.disney\.error\.v1\.0\+json$",
-        r"^application/vnd\.vimeo\.currency\.json\+json$",
-        r"^application/vnd\.maxmind\.com-insights\+json$",
-        r"^application/vnd\.adobe\.error-response\+json$",
-        r"^application/vnd\.vimeo\.profilesection\+json$",
-        r"^application/vnd\.abc\.terminus\.content\+json$",
         r"^application/javascript,application/javascript$",
-        r"^application/vnd\.vimeo\.video\.texttrack\+json$",
-        r"^application/vnd\.contentful\.delivery\.v1\+json$",
+        r"^application/javascriptapplication/x-javascript$",
         r"^application/javascript,application/x-javascript$",
-        r"^application/vnd\.spring-boot\.actuator\.v3\+json$",
-        r"^application/vnd\.vimeo\.marketplace\.skill\+json$",
         r"^application/vnd\.oasis\.opendocument\.spreadsheet$",
-        r"^application/vnd\.disney\.field\.error\.v1\.0\+json$",
         r"^application/vnd\.google\.octet-stream-compressible$",
         r"^application/vnd\.oasis\.opendocument\.presentation$",
         r"^application/vnd\.openxmlformats-officedocument\.spre$",
-        r"^application/vnd\.oracle\.adf\.resourcecollection\+json$",
         r"^application/vnd\.oasis\.opendocument\.formula-template$",
-        r"^application/vnd\.vmware\.horizon\.manager\.branding\+json$",
-        r"^application/vnd\.vimeo\.live\.interaction_room_status\+json$",
     ]
 
 # Mapping of file extensions to their corresponding content-type regex groups.

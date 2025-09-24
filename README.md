@@ -69,9 +69,11 @@ Install dependencies:
 Suggestion for additional privacy, add the following lines to the hosts of your crawler clients:
 
 /etc/hosts
+
+```
 127.0.0.1 plausible.io
 127.0.0.1 www.plausible.io
-
+```
 
 ## Configuration
 
